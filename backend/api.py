@@ -1,17 +1,22 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy.orm import Session
 from database.db import SessionLocal, get_engine, Base
 from database import models
 from backend import schemas
-from backend.security import encrypt_token
+from backend.security import encrypt_token, decrypt_token
 from backend.backup_engine import run_backup_for_all, run_backup_for_center
+from backend.fortigate_client import restore_config
+from backend.config import settings
 from storage.file_manager import ensure_center_dir
 from pathlib import Path
 import difflib
+import secrets
 
 
 app = FastAPI(title="FortiGate Backup Manager")
+security = HTTPBasic()
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,6 +35,19 @@ def get_db():
         db.close()
 
 
+def require_auth(credentials: HTTPBasicCredentials = Depends(security)) -> None:
+    if not settings.api_username or not settings.api_password:
+        return
+    valid_user = secrets.compare_digest(credentials.username, settings.api_username)
+    valid_pass = secrets.compare_digest(credentials.password, settings.api_password)
+    if not (valid_user and valid_pass):
+        raise HTTPException(
+            status_code=401,
+            detail="Unauthorized",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=get_engine())
@@ -40,7 +58,7 @@ def health():
     return {"status": "ok"}
 
 
-@app.post("/centers", response_model=schemas.CenterOut)
+@app.post("/centers", response_model=schemas.CenterOut, dependencies=[Depends(require_auth)])
 def create_center(payload: schemas.CenterCreate, db: Session = Depends(get_db)):
     existing = db.query(models.Center).filter(models.Center.name == payload.name).first()
     if existing:
@@ -61,12 +79,12 @@ def create_center(payload: schemas.CenterCreate, db: Session = Depends(get_db)):
     return center
 
 
-@app.get("/centers", response_model=list[schemas.CenterOut])
+@app.get("/centers", response_model=list[schemas.CenterOut], dependencies=[Depends(require_auth)])
 def list_centers(db: Session = Depends(get_db)):
     return db.query(models.Center).all()
 
 
-@app.get("/centers/{center_id}", response_model=schemas.CenterOut)
+@app.get("/centers/{center_id}", response_model=schemas.CenterOut, dependencies=[Depends(require_auth)])
 def get_center(center_id: int, db: Session = Depends(get_db)):
     center = db.query(models.Center).filter(models.Center.id == center_id).first()
     if not center:
@@ -74,7 +92,7 @@ def get_center(center_id: int, db: Session = Depends(get_db)):
     return center
 
 
-@app.put("/centers/{center_id}", response_model=schemas.CenterOut)
+@app.put("/centers/{center_id}", response_model=schemas.CenterOut, dependencies=[Depends(require_auth)])
 def update_center(center_id: int, payload: schemas.CenterUpdate, db: Session = Depends(get_db)):
     center = db.query(models.Center).filter(models.Center.id == center_id).first()
     if not center:
@@ -97,7 +115,7 @@ def update_center(center_id: int, payload: schemas.CenterUpdate, db: Session = D
     return center
 
 
-@app.delete("/centers/{center_id}")
+@app.delete("/centers/{center_id}", dependencies=[Depends(require_auth)])
 def delete_center(center_id: int, db: Session = Depends(get_db)):
     center = db.query(models.Center).filter(models.Center.id == center_id).first()
     if not center:
@@ -107,13 +125,13 @@ def delete_center(center_id: int, db: Session = Depends(get_db)):
     return {"deleted": True}
 
 
-@app.post("/backups/run")
+@app.post("/backups/run", dependencies=[Depends(require_auth)])
 def run_backups(db: Session = Depends(get_db)):
     result = run_backup_for_all(db)
     return result
 
 
-@app.post("/backups/run/{center_id}")
+@app.post("/backups/run/{center_id}", dependencies=[Depends(require_auth)])
 def run_backup_one(center_id: int, db: Session = Depends(get_db)):
     center = db.query(models.Center).filter(models.Center.id == center_id).first()
     if not center:
@@ -124,7 +142,7 @@ def run_backup_one(center_id: int, db: Session = Depends(get_db)):
     return {"backup_id": backup.id}
 
 
-@app.get("/backups", response_model=list[schemas.BackupOut])
+@app.get("/backups", response_model=list[schemas.BackupOut], dependencies=[Depends(require_auth)])
 def list_backups(center_id: int | None = None, db: Session = Depends(get_db)):
     query = db.query(models.Backup)
     if center_id is not None:
@@ -132,7 +150,7 @@ def list_backups(center_id: int | None = None, db: Session = Depends(get_db)):
     return query.order_by(models.Backup.backup_date.desc()).all()
 
 
-@app.get("/events", response_model=list[schemas.EventOut])
+@app.get("/events", response_model=list[schemas.EventOut], dependencies=[Depends(require_auth)])
 def list_events(center_id: int | None = None, db: Session = Depends(get_db)):
     query = db.query(models.Event)
     if center_id is not None:
@@ -140,21 +158,31 @@ def list_events(center_id: int | None = None, db: Session = Depends(get_db)):
     return query.order_by(models.Event.timestamp.desc()).all()
 
 
-@app.post("/restore/{backup_id}")
+@app.post("/restore/{backup_id}", dependencies=[Depends(require_auth)])
 def restore_backup(backup_id: int, db: Session = Depends(get_db)):
     backup = db.query(models.Backup).filter(models.Backup.id == backup_id).first()
     if not backup:
         raise HTTPException(status_code=404, detail="Backup not found")
 
+    center = db.query(models.Center).filter(models.Center.id == backup.center_id).first()
+    if not center:
+        raise HTTPException(status_code=404, detail="Center not found")
+
     path = Path(backup.file_path)
     if not path.exists():
         raise HTTPException(status_code=404, detail="Backup file missing")
 
-    # Placeholder: production restore would push config via FortiOS API.
-    return {"restored": True, "file": str(path)}
+    token = decrypt_token(center.api_token_encrypted)
+    content = path.read_bytes()
+    try:
+        restore_config(center.fortigate_ip, token, content)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Restore failed: {exc}") from exc
+
+    return {"restored": True, "file": str(path), "center": center.name}
 
 
-@app.get("/diff", response_model=schemas.DiffResponse)
+@app.get("/diff", response_model=schemas.DiffResponse, dependencies=[Depends(require_auth)])
 def diff_backups(center_id: int, from_backup_id: int, to_backup_id: int, db: Session = Depends(get_db)):
     from_backup = db.query(models.Backup).filter(models.Backup.id == from_backup_id).first()
     to_backup = db.query(models.Backup).filter(models.Backup.id == to_backup_id).first()

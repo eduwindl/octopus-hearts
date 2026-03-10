@@ -52,6 +52,10 @@ docker compose up --build
 
 API will be available on `http://localhost:8000` and dashboard at `http://localhost:8080`.
 
+## Authentication
+
+Set `API_USERNAME` and `API_PASSWORD` to require Basic Auth on the API. The dashboard will prompt for these credentials.
+
 ## Scheduler
 
 Run the scheduler in its own container or process:
@@ -82,5 +86,5 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 ## Notes
 
-- The restore endpoint is a placeholder; production restore would push config to the FortiGate API.
-- SSL verification is disabled in the backup engine for simplicity; enable it in production.
+- Restore uses the FortiOS config restore API endpoint defined by `FORTIGATE_RESTORE_ENDPOINT`.
+- SSL verification is disabled by default; enable `FORTIGATE_VERIFY_SSL=true` in production.

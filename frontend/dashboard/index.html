@@ -15,6 +15,23 @@
     <button id="runAll" class="primary">Run Backups</button>
   </header>
 
+  <div id="authOverlay" class="auth-overlay hidden">
+    <div class="auth-card">
+      <h2>Sign in</h2>
+      <p>Enter API credentials to access the dashboard.</p>
+      <label>
+        Username
+        <input id="authUser" type="text" autocomplete="username" />
+      </label>
+      <label>
+        Password
+        <input id="authPass" type="password" autocomplete="current-password" />
+      </label>
+      <button id="authSubmit" class="primary">Login</button>
+      <div id="authError" class="auth-error"></div>
+    </div>
+  </div>
+
   <section class="cards">
     <div class="card">
       <h2>Total Centers</h2>

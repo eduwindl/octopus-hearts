@@ -1,8 +1,32 @@
 const API_BASE = window.API_BASE || "http://localhost:8000";
+const AUTH_KEY = "fgbm_auth";
+
+function getAuthHeader() {
+  const token = localStorage.getItem(AUTH_KEY);
+  if (!token) return {};
+  return { Authorization: `Basic ${token}` };
+}
+
+function showAuthOverlay(show) {
+  const overlay = document.getElementById("authOverlay");
+  overlay.classList.toggle("hidden", !show);
+}
+
+function setAuthError(message) {
+  document.getElementById("authError").textContent = message || "";
+}
 
 async function fetchJson(path, options = {}) {
-  const res = await fetch(`${API_BASE}${path}`, options);
+  const headers = {
+    ...(options.headers || {}),
+    ...getAuthHeader(),
+  };
+  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (!res.ok) {
+    if (res.status === 401) {
+      showAuthOverlay(true);
+      throw new Error("Unauthorized");
+    }
     throw new Error(await res.text());
   }
   return res.json();
@@ -66,4 +90,26 @@ async function runAll() {
 
 document.getElementById("runAll").addEventListener("click", runAll);
 
-loadDashboard();
+document.getElementById("authSubmit").addEventListener("click", async () => {
+  const user = document.getElementById("authUser").value.trim();
+  const pass = document.getElementById("authPass").value;
+  if (!user || !pass) {
+    setAuthError("Username and password required.");
+    return;
+  }
+  const token = btoa(`${user}:${pass}`);
+  localStorage.setItem(AUTH_KEY, token);
+  setAuthError("");
+  try {
+    await loadDashboard();
+    showAuthOverlay(false);
+  } catch (err) {
+    setAuthError("Invalid credentials.");
+  }
+});
+
+const existingAuth = localStorage.getItem(AUTH_KEY);
+showAuthOverlay(!existingAuth);
+if (existingAuth) {
+  loadDashboard().catch(() => showAuthOverlay(true));
+}

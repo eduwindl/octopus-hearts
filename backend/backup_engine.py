@@ -1,31 +1,16 @@
-import requests
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from backend.config import settings
 from backend.security import decrypt_token
+from backend.fortigate_client import fetch_config
 from database import models
 from storage.file_manager import write_backup, enforce_retention
 from alerts.notifier import notify_failure
 
-
-BACKUP_ENDPOINT = "/api/v2/monitor/system/config/backup"
-
-
-def fetch_fortigate_config(fortigate_ip: str, api_token: str) -> bytes:
-    url = f"https://{fortigate_ip}{BACKUP_ENDPOINT}"
-    headers = {
-        "Authorization": f"Bearer {api_token}",
-    }
-    params = {"scope": "global"}
-    response = requests.get(url, headers=headers, params=params, timeout=settings.fortigate_timeout_seconds, verify=False)
-    response.raise_for_status()
-    return response.content
-
-
 def run_backup_for_center(db: Session, center: models.Center) -> models.Backup | None:
     token = decrypt_token(center.api_token_encrypted)
     try:
-        content = fetch_fortigate_config(center.fortigate_ip, token)
+        content = fetch_config(center.fortigate_ip, token)
         file_path, checksum, size = write_backup(center.name, content)
 
         backup = models.Backup(

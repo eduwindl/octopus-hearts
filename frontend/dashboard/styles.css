@@ -118,3 +118,50 @@ th, td {
   border-radius: 8px;
   font-size: 13px;
 }
+
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(6, 11, 18, 0.85);
+  display: grid;
+  place-items: center;
+  z-index: 10;
+}
+
+.auth-overlay.hidden {
+  display: none;
+}
+
+.auth-card {
+  background: #0f1f33;
+  border-radius: 16px;
+  padding: 24px;
+  width: min(360px, 90vw);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.auth-card h2 {
+  margin-top: 0;
+}
+
+.auth-card label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.auth-card input {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #0b1522;
+  color: var(--text);
+}
+
+.auth-error {
+  margin-top: 10px;
+  color: #f87171;
+  font-size: 12px;
+}

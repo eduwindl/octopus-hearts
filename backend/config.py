@@ -14,8 +14,13 @@ class Settings(BaseSettings):
     fortigate_timeout_seconds: int = 30
 
     token_encryption_key: str = "CHANGE_ME__32_BYTES_BASE64"
+    fortigate_verify_ssl: bool = False
+    fortigate_restore_endpoint: str = "/api/v2/monitor/system/config/restore"
 
     scheduler_timezone: str = "America/Santo_Domingo"
+
+    api_username: str | None = None
+    api_password: str | None = None
 
     smtp_host: str | None = None
     smtp_port: int = 587

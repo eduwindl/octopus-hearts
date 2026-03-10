@@ -22,6 +22,10 @@ services:
       RETENTION_COUNT: 3
       TOKEN_ENCRYPTION_KEY: "CHANGE_ME__32_BYTES_BASE64"
       SCHEDULER_TIMEZONE: America/Santo_Domingo
+      API_USERNAME: admin
+      API_PASSWORD: changeme
+      FORTIGATE_VERIFY_SSL: "false"
+      FORTIGATE_RESTORE_ENDPOINT: "/api/v2/monitor/system/config/restore"
     volumes:
       - backups:/backups
     ports:
