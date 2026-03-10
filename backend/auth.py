@@ -1,7 +1,6 @@
 from passlib.hash import bcrypt
 from sqlalchemy.orm import Session
 from database import models
-from backend.config import settings
 
 
 def hash_password(password: str) -> str:
@@ -12,14 +11,14 @@ def verify_password(password: str, password_hash: str) -> bool:
     return bcrypt.verify(password, password_hash)
 
 
-def ensure_admin_user(db: Session) -> models.User:
+def ensure_admin_user(db: Session, username: str, password: str) -> models.User:
     existing = db.query(models.User).first()
     if existing:
         return existing
 
     user = models.User(
-        username=settings.admin_username,
-        password_hash=hash_password(settings.admin_password),
+        username=username,
+        password_hash=hash_password(password),
         role="admin",
         is_active=True,
     )

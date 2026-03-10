@@ -3,12 +3,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "FortiGate Backup Manager"
-    api_host: str = "0.0.0.0"
-    api_port: int = 8000
 
     database_url: str = "sqlite:///./data/fgbm.db"
 
-    backups_root: str = "/backups"
+    backups_root: str = "./backups"
     retention_count: int = 3
 
     fortigate_timeout_seconds: int = 30
@@ -18,12 +16,7 @@ class Settings(BaseSettings):
     fortigate_restore_endpoint: str = "/api/v2/monitor/system/config/restore"
 
     scheduler_timezone: str = "America/Santo_Domingo"
-
-    api_username: str | None = None
-    api_password: str | None = None
-    auth_enabled: bool = True
-    admin_username: str = "admin"
-    admin_password: str = "changeme"
+    scheduler_enabled: bool = True
 
     smtp_host: str | None = None
     smtp_port: int = 587

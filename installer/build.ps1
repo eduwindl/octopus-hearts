@@ -5,7 +5,7 @@ $projectRoot = Join-Path $root ".."
 $distDir = Join-Path $projectRoot "dist"
 
 if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-  Write-Host "Python is required to build the portable EXE." -ForegroundColor Red
+  Write-Host "Python is required to build the EXE." -ForegroundColor Red
   exit 1
 }
 
@@ -14,8 +14,7 @@ try {
   python -m pip install --user -r requirements.txt
   python -m pip install --user pyinstaller
 
-  $addData = "frontend\dashboard;frontend\dashboard"
-  python -m PyInstaller --noconfirm --onefile --name fgbm --add-data $addData launcher.py
+  python -m PyInstaller --noconfirm --onefile --name fgbm desktop_app.py
 
   if (-not (Test-Path $distDir)) { New-Item -ItemType Directory -Force -Path $distDir | Out-Null }
   Copy-Item .env.example (Join-Path $distDir ".env.example") -Force
@@ -25,3 +24,16 @@ try {
 }
 
 Write-Host "Build complete. EXE located at dist\\fgbm.exe" -ForegroundColor Green
+
+$iscc = Get-Command iscc -ErrorAction SilentlyContinue
+if ($iscc) {
+  Push-Location $root
+  try {
+    iscc setup.iss
+    Write-Host "Installer created: installer\\FGBM-Setup.exe" -ForegroundColor Green
+  } finally {
+    Pop-Location
+  }
+} else {
+  Write-Host "Inno Setup not found. To create a wizard installer, install Inno Setup and rerun build.ps1." -ForegroundColor Yellow
+}
