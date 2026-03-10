@@ -9,6 +9,7 @@ from backend.security import encrypt_token, decrypt_token
 from backend.backup_engine import run_backup_for_all, run_backup_for_center
 from backend.fortigate_client import restore_config
 from backend.config import settings
+from backend.auth import ensure_admin_user, authenticate_user, hash_password
 from storage.file_manager import ensure_center_dir
 from pathlib import Path
 import difflib
@@ -35,27 +36,75 @@ def get_db():
         db.close()
 
 
-def require_auth(credentials: HTTPBasicCredentials = Depends(security)) -> None:
-    if not settings.api_username or not settings.api_password:
-        return
-    valid_user = secrets.compare_digest(credentials.username, settings.api_username)
-    valid_pass = secrets.compare_digest(credentials.password, settings.api_password)
-    if not (valid_user and valid_pass):
+def require_auth(
+    credentials: HTTPBasicCredentials = Depends(security),
+    db: Session = Depends(get_db),
+) -> models.User | None:
+    if not settings.auth_enabled:
+        return None
+    user = authenticate_user(db, credentials.username, credentials.password)
+    if not user:
         raise HTTPException(
             status_code=401,
             detail="Unauthorized",
             headers={"WWW-Authenticate": "Basic"},
         )
+    return user
+
+
+def require_admin(user: models.User = Depends(require_auth)) -> models.User:
+    if user is None or user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
 
 
 @app.on_event("startup")
 def on_startup():
     Base.metadata.create_all(bind=get_engine())
+    db = SessionLocal()
+    try:
+        ensure_admin_user(db)
+    finally:
+        db.close()
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.post("/users", response_model=schemas.UserOut, dependencies=[Depends(require_admin)])
+def create_user(payload: schemas.UserCreate, db: Session = Depends(get_db)):
+    existing = db.query(models.User).filter(models.User.username == payload.username).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    user = models.User(
+        username=payload.username,
+        password_hash=hash_password(payload.password),
+        role=payload.role,
+        is_active=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@app.get("/users", response_model=list[schemas.UserOut], dependencies=[Depends(require_admin)])
+def list_users(db: Session = Depends(get_db)):
+    return db.query(models.User).order_by(models.User.created_at.desc()).all()
+
+
+@app.put("/users/{user_id}/disable", response_model=schemas.UserOut, dependencies=[Depends(require_admin)])
+def disable_user(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_active = False
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 @app.post("/centers", response_model=schemas.CenterOut, dependencies=[Depends(require_auth)])

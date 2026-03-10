@@ -54,6 +54,23 @@ class EventOut(BaseModel):
         from_attributes = True
 
 
+class UserCreate(BaseModel):
+    username: str
+    password: str = Field(..., min_length=6)
+    role: str = "operator"
+
+
+class UserOut(BaseModel):
+    id: int
+    username: str
+    role: str
+    is_active: bool
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class DiffResponse(BaseModel):
     center_id: int
     from_backup_id: int

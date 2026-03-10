@@ -60,14 +60,36 @@ It will ask for a username and password once and then open the dashboard.
 - Starts containers
 - Opens the dashboard
 
+## Plug-and-play (No Docker, local)
+
+If you prefer no Docker, you can run locally with SQLite:
+
+```
+python -m venv .venv
+.venv\\Scripts\\activate
+pip install -r requirements.txt
+uvicorn backend.api:app --host 0.0.0.0 --port 8000
+```
+
+Then open `frontend/dashboard/index.html` in your browser and point it to the API.
+
 ## Troubleshooting
 
 - If it says Docker is not running, start Docker Desktop and retry.
 - If the dashboard stays blank, wait 10-20 seconds and refresh.
 
-## Authentication
+## Authentication and Users
 
-Set `API_USERNAME` and `API_PASSWORD` to require Basic Auth on the API. The dashboard will prompt for these credentials.
+An admin user is created on first start using:
+
+- `ADMIN_USERNAME`
+- `ADMIN_PASSWORD`
+
+Passwords are stored as bcrypt hashes. You can add more users via the API:
+
+```
+POST /users
+```
 
 ## Scheduler
 

@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     api_host: str = "0.0.0.0"
     api_port: int = 8000
 
-    database_url: str = "postgresql+psycopg2://fgbm:fgbm@db:5432/fgbm"
+    database_url: str = "sqlite:///./data/fgbm.db"
 
     backups_root: str = "/backups"
     retention_count: int = 3
@@ -21,6 +21,9 @@ class Settings(BaseSettings):
 
     api_username: str | None = None
     api_password: str | None = None
+    auth_enabled: bool = True
+    admin_username: str = "admin"
+    admin_password: str = "changeme"
 
     smtp_host: str | None = None
     smtp_port: int = 587
