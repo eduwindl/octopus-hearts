@@ -43,14 +43,17 @@ fortigate-backup-manager
 
 ## Quick start (Docker)
 
-1. Copy `.env.example` to `.env` and set `TOKEN_ENCRYPTION_KEY`.
-2. From `docker` directory run:
-
-```
-docker compose up --build
-```
+1. Install Docker Desktop (one time).
+2. Double-click `start-docker.bat`.
 
 API will be available on `http://localhost:8000` and dashboard at `http://localhost:8080`.
+
+The start script will:
+- Create `.env` if missing
+- Generate a secure `TOKEN_ENCRYPTION_KEY`
+- Ask for dashboard username/password
+- Start containers
+- Open the dashboard
 
 ## Authentication
 
