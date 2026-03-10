@@ -3,6 +3,7 @@ import secrets
 import threading
 import queue
 from pathlib import Path
+import sys
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -10,6 +11,12 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 
 APP_TITLE = "FortiGate Backup Manager"
+
+
+def get_app_dir() -> Path:
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent
 
 
 def ensure_dirs(base_dir: Path) -> tuple[Path, Path, Path]:
@@ -33,7 +40,8 @@ def init_environment(base_dir: Path) -> None:
     data_dir, backups_dir, secret_file = ensure_dirs(base_dir)
     secret = load_or_create_secret(secret_file)
     os.environ.setdefault("TOKEN_ENCRYPTION_KEY", secret)
-    os.environ.setdefault("DATABASE_URL", "sqlite:///./data/fgbm.db")
+    db_path = data_dir / "fgbm.db"
+    os.environ.setdefault("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
     os.environ.setdefault("BACKUPS_ROOT", str(backups_dir))
 
 
@@ -452,7 +460,7 @@ def start_scheduler():
 
 
 def main():
-    base_dir = Path(__file__).resolve().parent
+    base_dir = get_app_dir()
     init_environment(base_dir)
 
     from database.db import SessionLocal, get_engine, Base
@@ -472,5 +480,17 @@ def main():
             scheduler.shutdown()
 
 
+def run():
+    try:
+        main()
+    except Exception as exc:
+        log_path = get_app_dir() / "fgbm.log"
+        try:
+            log_path.write_text(str(exc))
+        except Exception:
+            pass
+        messagebox.showerror("Fatal error", f"Application failed to start.\n\n{exc}")
+
+
 if __name__ == "__main__":
-    main()
+    run()
