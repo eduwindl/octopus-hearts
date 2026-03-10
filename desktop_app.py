@@ -476,6 +476,7 @@ def main():
     base_dir = get_app_dir()
     init_environment(base_dir)
 
+    from database import models
     from database.db import SessionLocal, get_engine, Base
     Base.metadata.create_all(bind=get_engine())
     root = tk.Tk()
