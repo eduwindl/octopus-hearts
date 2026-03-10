@@ -1,0 +1,43 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: fgbm
+      POSTGRES_PASSWORD: fgbm
+      POSTGRES_DB: fgbm
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    environment:
+      DATABASE_URL: postgresql+psycopg2://fgbm:fgbm@db:5432/fgbm
+      BACKUPS_ROOT: /backups
+      RETENTION_COUNT: 3
+      TOKEN_ENCRYPTION_KEY: "CHANGE_ME__32_BYTES_BASE64"
+      SCHEDULER_TIMEZONE: America/Santo_Domingo
+    volumes:
+      - backups:/backups
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+  dashboard:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - api
+
+volumes:
+  db_data:
+  backups:

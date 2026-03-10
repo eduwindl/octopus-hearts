@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FortiGate Backup Manager</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1>FortiGate Backup Manager</h1>
+      <p>Centralized visibility for daily configuration backups.</p>
+    </div>
+    <button id="runAll" class="primary">Run Backups</button>
+  </header>
+
+  <section class="cards">
+    <div class="card">
+      <h2>Total Centers</h2>
+      <div id="totalCenters" class="metric">0</div>
+    </div>
+    <div class="card">
+      <h2>Last Backup</h2>
+      <div id="lastBackup" class="metric">--</div>
+    </div>
+    <div class="card">
+      <h2>Failed</h2>
+      <div id="failedCenters" class="metric">0</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Centers</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>IP</th>
+          <th>Model</th>
+          <th>Status</th>
+          <th>Last Backup</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody id="centersBody"></tbody>
+    </table>
+  </section>
+
+  <section class="panel">
+    <h2>Recent Events</h2>
+    <div id="events"></div>
+  </section>
+
+  <script src="app.js"></script>
+</body>
+</html>
