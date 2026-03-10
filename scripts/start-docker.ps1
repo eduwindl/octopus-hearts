@@ -1,5 +1,15 @@
 $ErrorActionPreference = "Stop"
 
+function Write-Status([string]$message) {
+  Write-Host "[FGBM] $message"
+}
+
+function Fail-And-Exit([string]$message) {
+  Write-Host "[FGBM] ERROR: $message" -ForegroundColor Red
+  Read-Host "Press Enter to exit"
+  exit 1
+}
+
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $envFile = Join-Path $root "..\.env"
 $exampleFile = Join-Path $root "..\.env.example"
@@ -33,6 +43,30 @@ function Get-EnvValue([string]$path, [string]$key) {
   return $line.Split("=",2)[1]
 }
 
+if (-not (Get-EnvValue $envFile "DATABASE_URL")) {
+  Set-EnvValue $envFile "DATABASE_URL" "postgresql+psycopg2://fgbm:fgbm@db:5432/fgbm"
+}
+
+if (-not (Get-EnvValue $envFile "BACKUPS_ROOT")) {
+  Set-EnvValue $envFile "BACKUPS_ROOT" "/backups"
+}
+
+if (-not (Get-EnvValue $envFile "RETENTION_COUNT")) {
+  Set-EnvValue $envFile "RETENTION_COUNT" "3"
+}
+
+if (-not (Get-EnvValue $envFile "SCHEDULER_TIMEZONE")) {
+  Set-EnvValue $envFile "SCHEDULER_TIMEZONE" "America/Santo_Domingo"
+}
+
+if (-not (Get-EnvValue $envFile "FORTIGATE_VERIFY_SSL")) {
+  Set-EnvValue $envFile "FORTIGATE_VERIFY_SSL" "false"
+}
+
+if (-not (Get-EnvValue $envFile "FORTIGATE_RESTORE_ENDPOINT")) {
+  Set-EnvValue $envFile "FORTIGATE_RESTORE_ENDPOINT" "/api/v2/monitor/system/config/restore"
+}
+
 if (-not (Get-EnvValue $envFile "TOKEN_ENCRYPTION_KEY")) {
   $bytes = New-Object byte[] 32
   [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
@@ -52,8 +86,25 @@ if (-not (Get-EnvValue $envFile "API_PASSWORD")) {
 
 Copy-Item $envFile $dockerEnv -Force
 
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+  Fail-And-Exit "Docker is not installed. Install Docker Desktop and try again."
+}
+
+try {
+  docker version | Out-Null
+} catch {
+  Fail-And-Exit "Docker Desktop is not running. Start Docker Desktop and try again."
+}
+
+try {
+  docker compose version | Out-Null
+} catch {
+  Fail-And-Exit "Docker Compose is unavailable. Update Docker Desktop and try again."
+}
+
 Push-Location $dockerDir
 try {
+  Write-Status "Starting containers..."
   docker compose up --build -d
 } finally {
   Pop-Location

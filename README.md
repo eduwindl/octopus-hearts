@@ -41,19 +41,29 @@ fortigate-backup-manager
     Dockerfile.frontend
 ```
 
-## Quick start (Docker)
+## Plug-and-play (Docker)
 
 1. Install Docker Desktop (one time).
 2. Double-click `start-docker.bat`.
 
-API will be available on `http://localhost:8000` and dashboard at `http://localhost:8080`.
+It will ask for a username and password once and then open the dashboard.
 
-The start script will:
-- Create `.env` if missing
-- Generate a secure `TOKEN_ENCRYPTION_KEY`
-- Ask for dashboard username/password
-- Start containers
-- Open the dashboard
+**URLs**
+- Dashboard: `http://localhost:8080`
+- API: `http://localhost:8000`
+
+**What the start script does**
+- Creates `.env` if missing
+- Fills defaults for required settings
+- Generates a secure `TOKEN_ENCRYPTION_KEY`
+- Prompts for dashboard username/password
+- Starts containers
+- Opens the dashboard
+
+## Troubleshooting
+
+- If it says Docker is not running, start Docker Desktop and retry.
+- If the dashboard stays blank, wait 10-20 seconds and refresh.
 
 ## Authentication
 
