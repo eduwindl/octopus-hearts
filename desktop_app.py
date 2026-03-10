@@ -4,6 +4,7 @@ import threading
 import queue
 from pathlib import Path
 import sys
+import os
 import tkinter as tk
 from tkinter import ttk, messagebox
 
@@ -19,9 +20,20 @@ def get_app_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
-def ensure_dirs(base_dir: Path) -> tuple[Path, Path, Path]:
-    data_dir = base_dir / "data"
-    backups_dir = base_dir / "backups"
+def get_storage_dir(app_dir: Path) -> Path:
+    try:
+        test_file = app_dir / ".write_test"
+        test_file.write_text("ok")
+        test_file.unlink(missing_ok=True)
+        return app_dir
+    except Exception:
+        local_app_data = Path(os.environ.get("LOCALAPPDATA", app_dir))
+        return local_app_data / "FGBM"
+
+
+def ensure_dirs(storage_dir: Path) -> tuple[Path, Path, Path]:
+    data_dir = storage_dir / "data"
+    backups_dir = storage_dir / "backups"
     data_dir.mkdir(parents=True, exist_ok=True)
     backups_dir.mkdir(parents=True, exist_ok=True)
     return data_dir, backups_dir, data_dir / "secret.key"
@@ -37,7 +49,8 @@ def load_or_create_secret(secret_file: Path) -> str:
 
 def init_environment(base_dir: Path) -> None:
     import os
-    data_dir, backups_dir, secret_file = ensure_dirs(base_dir)
+    storage_dir = get_storage_dir(base_dir)
+    data_dir, backups_dir, secret_file = ensure_dirs(storage_dir)
     secret = load_or_create_secret(secret_file)
     os.environ.setdefault("TOKEN_ENCRYPTION_KEY", secret)
     db_path = data_dir / "fgbm.db"
@@ -484,7 +497,9 @@ def run():
     try:
         main()
     except Exception as exc:
-        log_path = get_app_dir() / "fgbm.log"
+        storage_dir = get_storage_dir(get_app_dir())
+        storage_dir.mkdir(parents=True, exist_ok=True)
+        log_path = storage_dir / "fgbm.log"
         try:
             log_path.write_text(str(exc))
         except Exception:
