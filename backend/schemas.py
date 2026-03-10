@@ -71,6 +71,10 @@ class UserOut(BaseModel):
         from_attributes = True
 
 
+class PasswordUpdate(BaseModel):
+    new_password: str = Field(..., min_length=6)
+
+
 class DiffResponse(BaseModel):
     center_id: int
     from_backup_id: int

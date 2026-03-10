@@ -44,11 +44,11 @@ function Get-EnvValue([string]$path, [string]$key) {
 }
 
 if (-not (Get-EnvValue $envFile "DATABASE_URL")) {
-  Set-EnvValue $envFile "DATABASE_URL" "postgresql+psycopg2://fgbm:fgbm@db:5432/fgbm"
+  Set-EnvValue $envFile "DATABASE_URL" "sqlite:///./data/fgbm.db"
 }
 
 if (-not (Get-EnvValue $envFile "BACKUPS_ROOT")) {
-  Set-EnvValue $envFile "BACKUPS_ROOT" "/backups"
+  Set-EnvValue $envFile "BACKUPS_ROOT" "./backups"
 }
 
 if (-not (Get-EnvValue $envFile "RETENTION_COUNT")) {
@@ -57,6 +57,10 @@ if (-not (Get-EnvValue $envFile "RETENTION_COUNT")) {
 
 if (-not (Get-EnvValue $envFile "SCHEDULER_TIMEZONE")) {
   Set-EnvValue $envFile "SCHEDULER_TIMEZONE" "America/Santo_Domingo"
+}
+
+if (-not (Get-EnvValue $envFile "AUTH_ENABLED")) {
+  Set-EnvValue $envFile "AUTH_ENABLED" "true"
 }
 
 if (-not (Get-EnvValue $envFile "FORTIGATE_VERIFY_SSL")) {
@@ -74,14 +78,14 @@ if (-not (Get-EnvValue $envFile "TOKEN_ENCRYPTION_KEY")) {
   Set-EnvValue $envFile "TOKEN_ENCRYPTION_KEY" $key
 }
 
-if (-not (Get-EnvValue $envFile "API_USERNAME")) {
-  $user = Read-Host "Create dashboard username"
-  Set-EnvValue $envFile "API_USERNAME" $user
+if (-not (Get-EnvValue $envFile "ADMIN_USERNAME")) {
+  $user = Read-Host "Create admin username"
+  Set-EnvValue $envFile "ADMIN_USERNAME" $user
 }
 
-if (-not (Get-EnvValue $envFile "API_PASSWORD")) {
-  $pass = Read-Host "Create dashboard password"
-  Set-EnvValue $envFile "API_PASSWORD" $pass
+if (-not (Get-EnvValue $envFile "ADMIN_PASSWORD")) {
+  $pass = Read-Host "Create admin password"
+  Set-EnvValue $envFile "ADMIN_PASSWORD" $pass
 }
 
 Copy-Item $envFile $dockerEnv -Force

@@ -73,6 +73,18 @@ uvicorn backend.api:app --host 0.0.0.0 --port 8000
 
 Then open `frontend/dashboard/index.html` in your browser and point it to the API.
 
+## Portable EXE (No Python, No Docker)
+
+Download the latest release and run `fgbm.exe`. It will start the API and open the UI automatically.
+
+Default URL: `http://localhost:8000`
+
+Default admin login:
+- Username: `admin`
+- Password: `changeme`
+
+Change the password in the Admin panel after first login.
+
 ## Troubleshooting
 
 - If it says Docker is not running, start Docker Desktop and retry.

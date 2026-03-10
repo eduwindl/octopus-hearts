@@ -49,6 +49,24 @@
 
   <section class="panel">
     <h2>Centers</h2>
+    <div class="form-grid">
+      <div>
+        <h3>Add FortiGate</h3>
+        <div class="form-row">
+          <input id="centerName" placeholder="Center name" />
+          <input id="centerLocation" placeholder="Location (optional)" />
+        </div>
+        <div class="form-row">
+          <input id="centerIp" placeholder="FortiGate IP" />
+          <input id="centerModel" placeholder="Model (optional)" />
+        </div>
+        <div class="form-row">
+          <input id="centerToken" placeholder="API token" />
+          <button id="addCenter" class="primary">Add Center</button>
+        </div>
+        <div id="centerMessage" class="form-message"></div>
+      </div>
+    </div>
     <table>
       <thead>
         <tr>
@@ -67,6 +85,37 @@
   <section class="panel">
     <h2>Recent Events</h2>
     <div id="events"></div>
+  </section>
+
+  <section id="adminPanel" class="panel hidden">
+    <h2>User Management (Admin)</h2>
+    <div class="form-row">
+      <input id="myNewPassword" type="password" placeholder="New admin password" />
+      <button id="updateMyPassword" class="primary">Update My Password</button>
+    </div>
+    <div id="myPasswordMessage" class="form-message"></div>
+    <div class="form-row">
+      <input id="userName" placeholder="Username" />
+      <input id="userPassword" type="password" placeholder="Password" />
+      <select id="userRole">
+        <option value="operator">Operator</option>
+        <option value="viewer">Viewer</option>
+        <option value="admin">Admin</option>
+      </select>
+      <button id="createUser" class="primary">Create User</button>
+    </div>
+    <div id="userMessage" class="form-message"></div>
+    <table>
+      <thead>
+        <tr>
+          <th>Username</th>
+          <th>Role</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="usersBody"></tbody>
+    </table>
   </section>
 
   <script src="app.js"></script>

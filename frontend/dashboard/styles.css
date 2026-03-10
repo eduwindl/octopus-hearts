@@ -88,6 +88,36 @@ th, td {
   font-size: 14px;
 }
 
+.form-grid {
+  margin-bottom: 16px;
+}
+
+.form-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.form-row input,
+.form-row select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: #0b1522;
+  color: var(--text);
+  min-width: 160px;
+}
+
+.form-message {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.hidden {
+  display: none;
+}
+
 .status-ok {
   color: #4ade80;
   font-weight: 600;

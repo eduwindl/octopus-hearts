@@ -1,5 +1,6 @@
 const API_BASE = window.API_BASE || "http://localhost:8000";
 const AUTH_KEY = "fgbm_auth";
+let currentUser = null;
 
 function getAuthHeader() {
   const token = localStorage.getItem(AUTH_KEY);
@@ -38,6 +39,7 @@ function formatDate(value) {
 }
 
 async function loadDashboard() {
+  currentUser = await fetchJson("/me");
   const centers = await fetchJson("/centers");
   const events = await fetchJson("/events");
 
@@ -81,6 +83,14 @@ async function loadDashboard() {
     div.textContent = `${formatDate(e.timestamp)} | ${e.event_type} | ${e.message}`;
     eventsContainer.appendChild(div);
   });
+
+  const adminPanel = document.getElementById("adminPanel");
+  if (currentUser && currentUser.role === "admin") {
+    adminPanel.classList.remove("hidden");
+    await loadUsers();
+  } else {
+    adminPanel.classList.add("hidden");
+  }
 }
 
 async function runAll() {
@@ -89,6 +99,72 @@ async function runAll() {
 }
 
 document.getElementById("runAll").addEventListener("click", runAll);
+
+document.getElementById("addCenter").addEventListener("click", async () => {
+  const payload = {
+    name: document.getElementById("centerName").value.trim(),
+    location: document.getElementById("centerLocation").value.trim() || null,
+    fortigate_ip: document.getElementById("centerIp").value.trim(),
+    model: document.getElementById("centerModel").value.trim() || null,
+    api_token: document.getElementById("centerToken").value.trim(),
+  };
+  if (!payload.name || !payload.fortigate_ip || !payload.api_token) {
+    document.getElementById("centerMessage").textContent = "Name, IP and token are required.";
+    return;
+  }
+  try {
+    await fetchJson("/centers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    document.getElementById("centerMessage").textContent = "Center created.";
+    await loadDashboard();
+  } catch (err) {
+    document.getElementById("centerMessage").textContent = `Error: ${err.message}`;
+  }
+});
+
+document.getElementById("createUser").addEventListener("click", async () => {
+  const payload = {
+    username: document.getElementById("userName").value.trim(),
+    password: document.getElementById("userPassword").value,
+    role: document.getElementById("userRole").value,
+  };
+  if (!payload.username || !payload.password) {
+    document.getElementById("userMessage").textContent = "Username and password are required.";
+    return;
+  }
+  try {
+    await fetchJson("/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    document.getElementById("userMessage").textContent = "User created.";
+    await loadUsers();
+  } catch (err) {
+    document.getElementById("userMessage").textContent = `Error: ${err.message}`;
+  }
+});
+
+document.getElementById("updateMyPassword").addEventListener("click", async () => {
+  const newPassword = document.getElementById("myNewPassword").value;
+  if (!newPassword) {
+    document.getElementById("myPasswordMessage").textContent = "Password required.";
+    return;
+  }
+  try {
+    await fetchJson(`/users/${currentUser.id}/password`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ new_password: newPassword }),
+    });
+    document.getElementById("myPasswordMessage").textContent = "Password updated.";
+  } catch (err) {
+    document.getElementById("myPasswordMessage").textContent = `Error: ${err.message}`;
+  }
+});
 
 document.getElementById("authSubmit").addEventListener("click", async () => {
   const user = document.getElementById("authUser").value.trim();
@@ -112,4 +188,28 @@ const existingAuth = localStorage.getItem(AUTH_KEY);
 showAuthOverlay(!existingAuth);
 if (existingAuth) {
   loadDashboard().catch(() => showAuthOverlay(true));
+}
+
+async function loadUsers() {
+  const users = await fetchJson("/users");
+  const tbody = document.getElementById("usersBody");
+  tbody.innerHTML = "";
+  users.forEach((u) => {
+    const tr = document.createElement("tr");
+    const status = u.is_active ? "Active" : "Disabled";
+    const action = u.is_active ? `<button data-id="${u.id}" class="primary">Disable</button>` : "--";
+    tr.innerHTML = `
+      <td>${u.username}</td>
+      <td>${u.role}</td>
+      <td>${status}</td>
+      <td>${action}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+  tbody.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      await fetchJson(`/users/${btn.dataset.id}/disable`, { method: "PUT" });
+      await loadUsers();
+    });
+  });
 }

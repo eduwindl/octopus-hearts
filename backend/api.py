@@ -1,6 +1,8 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from database.db import SessionLocal, get_engine, Base
 from database import models
@@ -12,6 +14,7 @@ from backend.config import settings
 from backend.auth import ensure_admin_user, authenticate_user, hash_password
 from storage.file_manager import ensure_center_dir
 from pathlib import Path
+import os
 import difflib
 import secrets
 
@@ -26,6 +29,14 @@ app.add_middleware(
     allow_methods=["*"] ,
     allow_headers=["*"] ,
 )
+
+static_dir = os.getenv("FGBM_STATIC_DIR")
+if static_dir and Path(static_dir).exists():
+    app.mount("/ui", StaticFiles(directory=static_dir, html=True), name="ui")
+else:
+    default_static = Path(__file__).resolve().parent.parent / "frontend" / "dashboard"
+    if default_static.exists():
+        app.mount("/ui", StaticFiles(directory=default_static, html=True), name="ui")
 
 
 def get_db():
@@ -68,6 +79,17 @@ def on_startup():
         db.close()
 
 
+@app.get("/")
+def root():
+    static_root = os.getenv("FGBM_STATIC_DIR")
+    if static_root and Path(static_root).exists():
+        return FileResponse(Path(static_root) / "index.html")
+    default_static = Path(__file__).resolve().parent.parent / "frontend" / "dashboard"
+    if default_static.exists():
+        return FileResponse(default_static / "index.html")
+    return {"status": "ok"}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -104,6 +126,30 @@ def disable_user(user_id: int, db: Session = Depends(get_db)):
     db.add(user)
     db.commit()
     db.refresh(user)
+    return user
+
+
+@app.put("/users/{user_id}/password", response_model=schemas.UserOut)
+def update_password(
+    user_id: int,
+    payload: schemas.PasswordUpdate,
+    db: Session = Depends(get_db),
+    current: models.User = Depends(require_auth),
+):
+    if current.role != "admin" and current.id != user_id:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.password_hash = hash_password(payload.new_password)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+@app.get("/me", response_model=schemas.UserOut)
+def me(user: models.User = Depends(require_auth)):
     return user
 
 
