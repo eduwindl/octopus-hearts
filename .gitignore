@@ -9,3 +9,4 @@ data/
 .venv-build/
 .venv/
 fgbm.spec
+installer/FGBM-Setup.exe

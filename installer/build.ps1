@@ -26,10 +26,17 @@ try {
 Write-Host "Build complete. EXE located at dist\\fgbm.exe" -ForegroundColor Green
 
 $iscc = Get-Command iscc -ErrorAction SilentlyContinue
+if (-not $iscc) {
+  $candidate = "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe"
+  if (Test-Path $candidate) {
+    $iscc = $candidate
+  }
+}
+
 if ($iscc) {
   Push-Location $root
   try {
-    iscc setup.iss
+    & $iscc setup.iss
     Write-Host "Installer created: installer\\FGBM-Setup.exe" -ForegroundColor Green
   } finally {
     Pop-Location

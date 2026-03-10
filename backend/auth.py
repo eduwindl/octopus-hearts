@@ -1,14 +1,14 @@
-from passlib.hash import bcrypt
+from passlib.hash import pbkdf2_sha256
 from sqlalchemy.orm import Session
 from database import models
 
 
 def hash_password(password: str) -> str:
-    return bcrypt.hash(password)
+    return pbkdf2_sha256.hash(password)
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return bcrypt.verify(password, password_hash)
+    return pbkdf2_sha256.verify(password, password_hash)
 
 
 def ensure_admin_user(db: Session, username: str, password: str) -> models.User:
