@@ -314,6 +314,52 @@ def list_tags(db: Session = Depends(get_db)):
 
 
 # ═══════════════════════════════════════════
+# Bulk Credential Assignment
+# ═══════════════════════════════════════════
+
+class CredentialApplyRequest(schemas.BaseModel):
+    auth_mode: str = "credentials"       # "credentials" or "token"
+    fortigate_username: str | None = None
+    fortigate_password: str | None = None
+    api_token: str | None = None
+    tag: str | None = None               # apply to all centers with this tag
+    center_ids: list[int] | None = None   # or apply to specific center IDs
+
+
+@app.post("/credentials/apply", dependencies=[Depends(require_admin)])
+def apply_credentials(payload: CredentialApplyRequest, db: Session = Depends(get_db)):
+    """Apply credentials to all centers matching a tag or specific center IDs."""
+    query = db.query(models.Center)
+    if payload.tag:
+        query = query.filter(models.Center.tag == payload.tag)
+    elif payload.center_ids:
+        query = query.filter(models.Center.id.in_(payload.center_ids))
+    else:
+        raise HTTPException(status_code=400, detail="Provide a tag or center_ids")
+
+    centers = query.all()
+    if not centers:
+        raise HTTPException(status_code=404, detail="No matching centers found")
+
+    updated = 0
+    for center in centers:
+        center.auth_mode = payload.auth_mode
+        if payload.auth_mode == "credentials":
+            if payload.fortigate_username:
+                center.fortigate_username = payload.fortigate_username
+            if payload.fortigate_password:
+                center.fortigate_password_encrypted = encrypt_token(payload.fortigate_password)
+        elif payload.auth_mode == "token":
+            if payload.api_token:
+                center.api_token_encrypted = encrypt_token(payload.api_token)
+        db.add(center)
+        updated += 1
+
+    db.commit()
+    return {"updated": updated, "tag": payload.tag, "auth_mode": payload.auth_mode}
+
+
+# ═══════════════════════════════════════════
 # Backups
 # ═══════════════════════════════════════════
 

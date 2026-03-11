@@ -188,6 +188,7 @@ function switchTab(name) {
   document.querySelector(`[data-tab="${name}"]`).classList.add("active");
 
   if (name === "centers") loadCenters();
+  if (name === "credentials") loadCredentialStatus();
   if (name === "backups") updateBackupSelect();
   if (name === "events") loadEvents();
   if (name === "users") loadUsers();
@@ -462,7 +463,7 @@ async function runAllBackups() {
   } catch (err) { toast(`Backup run failed: ${err.message}`, "error"); }
   finally {
     btn.disabled = false;
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run All Backups`;
+    btn.innerHTML = '▶ RUN ALL BACKUPS';
   }
 }
 
@@ -483,7 +484,7 @@ async function runTagBackup() {
   } catch (err) { toast(`Tag backup failed: ${err.message}`, "error"); }
   finally {
     btn.disabled = false;
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run by Tag`;
+    btn.innerHTML = '▶ RUN BY TAG';
   }
 }
 
@@ -765,6 +766,96 @@ function esc(s) {
   const d = document.createElement("div");
   d.textContent = s;
   return d.innerHTML;
+}
+
+// ── Credentials Tab ─────────────────────────────────────────────────
+
+function toggleCredAuthFields() {
+  const mode = document.getElementById("credAuthMode").value;
+  document.querySelectorAll(".cred-user-field").forEach(el => el.style.display = mode === "credentials" ? "" : "none");
+  document.querySelectorAll(".cred-token-field").forEach(el => el.style.display = mode === "token" ? "" : "none");
+}
+
+// Update center count when tag changes
+document.getElementById("credTag")?.addEventListener("change", async () => {
+  const tag = document.getElementById("credTag").value;
+  const display = document.getElementById("credCountDisplay");
+  if (!tag) { display.textContent = "-- select a tag --"; return; }
+  try {
+    const centers = await api(`/centers?tag=${tag}`);
+    display.textContent = `${centers.length} centers`;
+    display.style.color = centers.length > 0 ? "#22c55e" : "#ef4444";
+  } catch { display.textContent = "error"; }
+});
+
+async function applyCredentials() {
+  const tag = document.getElementById("credTag").value;
+  const authMode = document.getElementById("credAuthMode").value;
+  const msgEl = document.getElementById("credMessage");
+
+  if (!tag) { msgEl.textContent = "Select a tag first."; msgEl.className = "form-message error"; return; }
+
+  const payload = { auth_mode: authMode, tag };
+  if (authMode === "credentials") {
+    payload.fortigate_username = document.getElementById("credUser").value.trim();
+    payload.fortigate_password = document.getElementById("credPass").value;
+    if (!payload.fortigate_username || !payload.fortigate_password) {
+      msgEl.textContent = "Username and password are required."; msgEl.className = "form-message error"; return;
+    }
+  } else {
+    payload.api_token = document.getElementById("credToken").value.trim();
+    if (!payload.api_token) {
+      msgEl.textContent = "API Token is required."; msgEl.className = "form-message error"; return;
+    }
+  }
+
+  if (!confirm(`This will update credentials for ALL ${tag.toUpperCase()} centers.\nAre you sure?`)) return;
+
+  try {
+    const result = await api("/credentials/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    msgEl.textContent = `✓ Updated ${result.updated} centers with ${authMode} auth`;
+    msgEl.className = "form-message success";
+    toast(`Credentials applied to ${result.updated} ${tag.toUpperCase()} centers`, "success");
+    // Clear password fields
+    ["credPass", "credToken"].forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+    loadCredentialStatus();
+  } catch (err) {
+    msgEl.textContent = err.message;
+    msgEl.className = "form-message error";
+  }
+}
+
+async function loadCredentialStatus() {
+  const grid = document.getElementById("credStatusGrid");
+  try {
+    const tags = await api("/tags");
+    if (tags.length === 0) { grid.innerHTML = '<p class="empty-state">No tags found</p>'; return; }
+
+    let html = '';
+    for (const t of tags) {
+      if (t.tag === 'untagged') continue;
+      const centers = await api(`/centers?tag=${t.tag}`);
+      const withCreds = centers.filter(c => c.auth_mode === 'credentials' && c.fortigate_username).length;
+      const withToken = centers.filter(c => c.auth_mode === 'token').length;
+      const noCreds = centers.length - withCreds - withToken;
+      const color = TAG_COLORS[t.tag] || '#4a7a4a';
+
+      html += `<div class="cred-status-card" style="border-color: ${color}30">
+        <div class="cred-status-tag" style="color: ${color}">${t.tag.toUpperCase()}</div>
+        <div class="cred-status-row"><span>Total</span><span style="color:var(--text)">${centers.length}</span></div>
+        <div class="cred-status-row"><span>With Credentials</span><span style="color:#22c55e">${withCreds}</span></div>
+        <div class="cred-status-row"><span>With Token</span><span style="color:#06b6d4">${withToken}</span></div>
+        <div class="cred-status-row"><span>No Auth</span><span style="color:${noCreds > 0 ? '#ef4444' : '#4a7a4a'}">${noCreds}</span></div>
+      </div>`;
+    }
+    grid.innerHTML = html;
+  } catch (err) {
+    grid.innerHTML = '<p class="empty-state">Failed to load</p>';
+  }
 }
 
 // ── Boot ────────────────────────────────────────────────────────────

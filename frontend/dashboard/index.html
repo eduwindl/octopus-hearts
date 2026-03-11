@@ -42,9 +42,7 @@
                 <input id="authPass" type="password" class="terminal-input" autocomplete="current-password" />
               </div>
               <div class="terminal-input-row" style="margin-top:12px">
-                <button id="authSubmit" class="terminal-btn" type="submit">
-                  [ AUTHENTICATE ]
-                </button>
+                <button id="authSubmit" class="terminal-btn" type="submit">[ AUTHENTICATE ]</button>
               </div>
               <div id="authError" class="terminal-error"></div>
             </form>
@@ -78,6 +76,10 @@
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
           <span>Centers</span>
         </button>
+        <button class="nav-item" data-tab="credentials" onclick="switchTab('credentials')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/><circle cx="12" cy="16" r="1"/></svg>
+          <span>Credentials</span>
+        </button>
         <button class="nav-item" data-tab="backups" onclick="switchTab('backups')">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
           <span>Backups</span>
@@ -107,55 +109,50 @@
     <main class="content">
       <!-- DASHBOARD TAB -->
       <section id="tab-dashboard" class="tab-panel active">
-        <div class="page-header">
-          <div>
-            <h2 class="page-title">Dashboard</h2>
-            <p class="page-subtitle">Real-time overview of your FortiGate fleet</p>
-          </div>
+        <div class="term-section-header">
+          <pre class="section-ascii">╔══════════════════════════════════════╗
+║  ◆ DASHBOARD · Fleet Overview       ║
+╚══════════════════════════════════════╝</pre>
           <div class="header-actions">
-            <select id="tagFilterDash" class="select-styled" onchange="loadDashboard()" style="margin-right:8px">
-              <option value="">All Tags</option>
-              <option value="minerd">MINERD</option>
-              <option value="transi">TRANSI</option>
-              <option value="unphu">UNPHU</option>
-              <option value="lanco">LANCO</option>
+            <select id="tagFilterDash" class="select-term" onchange="loadDashboard()">
+              <option value="">▸ All Tags</option>
+              <option value="minerd">▸ MINERD</option>
+              <option value="transi">▸ TRANSI</option>
+              <option value="unphu">▸ UNPHU</option>
+              <option value="lanco">▸ LANCO</option>
             </select>
-            <button class="btn-primary" id="runAll" onclick="runAllBackups()">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              Run All Backups
-            </button>
+            <button class="btn-term" id="runAll" onclick="runAllBackups()">▶ RUN ALL BACKUPS</button>
           </div>
         </div>
 
         <div class="metrics-grid">
-          <div class="metric-card" style="--delay:0">
-            <div class="metric-icon blue"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/></svg></div>
-            <div class="metric-data"><span class="metric-value" id="totalCenters">0</span><span class="metric-label">Total Centers</span></div>
+          <div class="metric-card-term" style="--delay:0">
+            <div class="metric-glyph">◈</div>
+            <div class="metric-data"><span class="metric-value" id="totalCenters">0</span><span class="metric-label">TOTAL CENTERS</span></div>
           </div>
-          <div class="metric-card" style="--delay:1">
-            <div class="metric-icon green"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
-            <div class="metric-data"><span class="metric-value" id="okCenters">0</span><span class="metric-label">Healthy</span></div>
+          <div class="metric-card-term ok-glow" style="--delay:1">
+            <div class="metric-glyph ok">●</div>
+            <div class="metric-data"><span class="metric-value" id="okCenters">0</span><span class="metric-label">HEALTHY</span></div>
           </div>
-          <div class="metric-card" style="--delay:2">
-            <div class="metric-icon red"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
-            <div class="metric-data"><span class="metric-value" id="failedCenters">0</span><span class="metric-label">Failed</span></div>
+          <div class="metric-card-term fail-glow" style="--delay:2">
+            <div class="metric-glyph fail">✗</div>
+            <div class="metric-data"><span class="metric-value" id="failedCenters">0</span><span class="metric-label">FAILED</span></div>
           </div>
-          <div class="metric-card" style="--delay:3">
-            <div class="metric-icon purple"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
-            <div class="metric-data"><span class="metric-value text-sm" id="lastBackup">--</span><span class="metric-label">Last Backup</span></div>
+          <div class="metric-card-term" style="--delay:3">
+            <div class="metric-glyph info">◷</div>
+            <div class="metric-data"><span class="metric-value text-sm" id="lastBackup">--</span><span class="metric-label">LAST BACKUP</span></div>
           </div>
         </div>
 
-        <!-- Tag Summary Cards -->
         <div id="tagSummary" class="tag-summary-grid"></div>
 
         <div class="grid-2">
-          <div class="glass-card fade-in" style="--delay:4">
-            <h3 class="card-title">Recent Activity</h3>
+          <div class="term-card fade-in" style="--delay:4">
+            <div class="term-card-header">┌── Recent Activity ──</div>
             <div id="recentEvents" class="events-list"><p class="empty-state">No events yet</p></div>
           </div>
-          <div class="glass-card fade-in" style="--delay:5">
-            <h3 class="card-title">Fleet Status</h3>
+          <div class="term-card fade-in" style="--delay:5">
+            <div class="term-card-header">┌── Fleet Status ──</div>
             <div id="fleetStatus" class="fleet-grid"><p class="empty-state">No centers registered</p></div>
           </div>
         </div>
@@ -163,40 +160,77 @@
 
       <!-- CENTERS TAB -->
       <section id="tab-centers" class="tab-panel">
-        <div class="page-header">
-          <div>
-            <h2 class="page-title">Centers</h2>
-            <p class="page-subtitle">Manage your FortiGate firewalls · Right-click a row to edit</p>
-          </div>
+        <div class="term-section-header">
+          <pre class="section-ascii">╔══════════════════════════════════════╗
+║  ◆ CENTERS · FortiGate Fleet         ║
+╚══════════════════════════════════════╝</pre>
           <div class="header-actions">
-            <select id="tagFilterCenters" class="select-styled" onchange="loadCenters()" style="margin-right:8px">
-              <option value="">All Tags</option>
-              <option value="minerd">MINERD</option>
-              <option value="transi">TRANSI</option>
-              <option value="unphu">UNPHU</option>
-              <option value="lanco">LANCO</option>
+            <select id="tagFilterCenters" class="select-term" onchange="loadCenters()">
+              <option value="">▸ All Tags</option>
+              <option value="minerd">▸ MINERD</option>
+              <option value="transi">▸ TRANSI</option>
+              <option value="unphu">▸ UNPHU</option>
+              <option value="lanco">▸ LANCO</option>
             </select>
-            <button class="btn-secondary" onclick="toggleBulkForm()">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              Bulk Import
-            </button>
-            <button class="btn-primary" onclick="toggleAddForm()">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Add FortiGate
-            </button>
+            <button class="btn-term-ghost" onclick="toggleBulkForm()">↑ BULK IMPORT</button>
+            <button class="btn-term" onclick="toggleAddForm()">+ ADD FORTIGATE</button>
           </div>
         </div>
+        <p class="term-hint">💡 Right-click any row to edit, backup, or delete</p>
 
         <!-- ADD CENTER FORM -->
-        <div id="addCenterForm" class="glass-card form-card collapsed">
-          <h3 class="card-title">New FortiGate Center</h3>
+        <div id="addCenterForm" class="term-card form-card collapsed">
+          <div class="term-card-header">┌── New FortiGate Center ──</div>
           <div class="form-grid-3">
             <div class="input-group"><label>Name *</label><input id="centerName" placeholder="e.g. Main Office" /></div>
             <div class="input-group"><label>FortiGate IP *</label><input id="centerIp" placeholder="e.g. 10.1.1.1" /></div>
+            <div class="input-group"><label>Tag</label><select id="centerTag" class="select-term"><option value="">No Tag</option><option value="minerd">MINERD</option><option value="transi">TRANSI</option><option value="unphu">UNPHU</option><option value="lanco">LANCO</option></select></div>
+            <div class="input-group"><label>Auth Mode</label><select id="centerAuthMode" class="select-term" onchange="toggleAuthFields()"><option value="credentials">Username / Password</option><option value="token">API Token</option></select></div>
+            <div class="input-group auth-cred-field"><label>FG Username *</label><input id="centerFgUser" placeholder="e.g. admin" /></div>
+            <div class="input-group auth-cred-field"><label>FG Password *</label><input id="centerFgPass" type="password" placeholder="FortiGate password" /></div>
+            <div class="input-group auth-token-field" style="display:none"><label>API Token *</label><input id="centerToken" type="password" placeholder="Enter API token" /></div>
+            <div class="input-group"><label>Location</label><input id="centerLocation" placeholder="e.g. Santo Domingo" /></div>
+            <div class="input-group"><label>Model</label><input id="centerModel" placeholder="e.g. FortiGate 100F" /></div>
+            <div class="input-group form-actions"><label>&nbsp;</label><div class="btn-group"><button class="btn-term" onclick="addCenter()">+ ADD</button><button class="btn-term-ghost" onclick="toggleAddForm()">CANCEL</button></div></div>
+          </div>
+          <div id="centerMessage" class="form-message"></div>
+        </div>
+
+        <!-- BULK IMPORT FORM -->
+        <div id="bulkImportForm" class="term-card form-card collapsed">
+          <div class="term-card-header">┌── Bulk Import (JSON) ──</div>
+          <div class="input-group"><textarea id="bulkJson" rows="6" placeholder='[{"name":"Centro 1","fortigate_ip":"10.0.0.1","tag":"minerd"}]' class="term-textarea"></textarea></div>
+          <div class="btn-group" style="margin-top:8px"><button class="btn-term" onclick="bulkImport()">IMPORT ALL</button><button class="btn-term-ghost" onclick="toggleBulkForm()">CANCEL</button></div>
+          <div id="bulkMessage" class="form-message"></div>
+        </div>
+
+        <div class="term-card">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Name</th><th>Tag</th><th>Location</th><th>IP Address</th><th>Auth</th><th>Model</th><th>Status</th><th>Last Backup</th><th>Actions</th></tr></thead>
+              <tbody id="centersBody"></tbody>
+            </table>
+            <p id="centersEmpty" class="empty-state hidden">No centers registered yet.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- CREDENTIALS TAB -->
+      <section id="tab-credentials" class="tab-panel">
+        <div class="term-section-header">
+          <pre class="section-ascii">╔══════════════════════════════════════╗
+║  ◆ CREDENTIALS · Mass Assignment     ║
+╚══════════════════════════════════════╝</pre>
+        </div>
+
+        <div class="term-card">
+          <div class="term-card-header">┌── Apply Credentials to Tag ──</div>
+          <p class="term-hint" style="margin:8px 0 16px">Assign FortiGate credentials to ALL centers with a specific tag at once.</p>
+          <div class="form-grid-3">
             <div class="input-group">
-              <label>Tag</label>
-              <select id="centerTag" class="select-styled">
-                <option value="">No Tag</option>
+              <label>Target Tag *</label>
+              <select id="credTag" class="select-term">
+                <option value="">Select tag…</option>
                 <option value="minerd">MINERD</option>
                 <option value="transi">TRANSI</option>
                 <option value="unphu">UNPHU</option>
@@ -205,84 +239,48 @@
             </div>
             <div class="input-group">
               <label>Auth Mode</label>
-              <select id="centerAuthMode" class="select-styled" onchange="toggleAuthFields()">
+              <select id="credAuthMode" class="select-term" onchange="toggleCredAuthFields()">
                 <option value="credentials">Username / Password</option>
                 <option value="token">API Token</option>
               </select>
             </div>
-            <div class="input-group auth-cred-field"><label>FortiGate Username *</label><input id="centerFgUser" placeholder="e.g. admin" /></div>
-            <div class="input-group auth-cred-field"><label>FortiGate Password *</label><input id="centerFgPass" type="password" placeholder="FortiGate password" /></div>
-            <div class="input-group auth-token-field" style="display:none"><label>API Token *</label><input id="centerToken" type="password" placeholder="Enter API token" /></div>
-            <div class="input-group"><label>Location</label><input id="centerLocation" placeholder="e.g. Santo Domingo" /></div>
-            <div class="input-group"><label>Model</label><input id="centerModel" placeholder="e.g. FortiGate 100F" /></div>
-            <div class="input-group form-actions">
-              <label>&nbsp;</label>
-              <div class="btn-group">
-                <button class="btn-primary" id="addCenter" onclick="addCenter()">Add Center</button>
-                <button class="btn-ghost" onclick="toggleAddForm()">Cancel</button>
-              </div>
+            <div class="input-group" id="credTagCount">
+              <label>Centers in Tag</label>
+              <div class="cred-count-display" id="credCountDisplay">-- select a tag --</div>
             </div>
+            <div class="input-group cred-user-field"><label>FortiGate Username *</label><input id="credUser" placeholder="e.g. admin" /></div>
+            <div class="input-group cred-user-field"><label>FortiGate Password *</label><input id="credPass" type="password" placeholder="Password for all centers" /></div>
+            <div class="input-group cred-token-field" style="display:none"><label>API Token *</label><input id="credToken" type="password" placeholder="Token for all centers" /></div>
           </div>
-          <div id="centerMessage" class="form-message"></div>
+          <div class="btn-group" style="margin-top:16px">
+            <button class="btn-term btn-term-warn" onclick="applyCredentials()">⚡ APPLY TO ALL CENTERS IN TAG</button>
+          </div>
+          <div id="credMessage" class="form-message"></div>
         </div>
 
-        <!-- BULK IMPORT FORM -->
-        <div id="bulkImportForm" class="glass-card form-card collapsed">
-          <h3 class="card-title">Bulk Import Centers (JSON)</h3>
-          <p style="color:var(--text-muted); margin-bottom:12px; font-size:0.85rem">
-            Paste a JSON array of centers. Each entry needs: <code>name</code>, <code>fortigate_ip</code>. Optional: <code>tag</code>, <code>location</code>, <code>model</code>, <code>fortigate_username</code>, <code>fortigate_password</code>.
-          </p>
-          <div class="input-group">
-            <textarea id="bulkJson" rows="8" placeholder='[{"name":"Centro 1","fortigate_ip":"10.0.0.1","tag":"minerd","fortigate_username":"admin","fortigate_password":"pass123"}]' style="width:100%;font-family:'JetBrains Mono',monospace;font-size:0.85rem;background:var(--bg-secondary);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:12px;resize:vertical"></textarea>
-          </div>
-          <div class="btn-group" style="margin-top:12px">
-            <button class="btn-primary" onclick="bulkImport()">Import All</button>
-            <button class="btn-ghost" onclick="toggleBulkForm()">Cancel</button>
-          </div>
-          <div id="bulkMessage" class="form-message"></div>
-        </div>
-
-        <div class="glass-card">
-          <div class="table-wrapper">
-            <table>
-              <thead><tr><th>Name</th><th>Tag</th><th>Location</th><th>IP Address</th><th>Auth</th><th>Model</th><th>Status</th><th>Last Backup</th><th>Actions</th></tr></thead>
-              <tbody id="centersBody"></tbody>
-            </table>
-            <p id="centersEmpty" class="empty-state hidden">No centers registered yet. Click "Add FortiGate" to get started.</p>
+        <div class="term-card">
+          <div class="term-card-header">┌── Credential Status by Tag ──</div>
+          <div id="credStatusGrid" class="cred-status-grid">
+            <p class="empty-state">Loading...</p>
           </div>
         </div>
       </section>
 
       <!-- BACKUPS TAB -->
       <section id="tab-backups" class="tab-panel">
-        <div class="page-header">
-          <div>
-            <h2 class="page-title">Backups</h2>
-            <p class="page-subtitle">View and restore configuration backups</p>
-          </div>
+        <div class="term-section-header">
+          <pre class="section-ascii">╔══════════════════════════════════════╗
+║  ◆ BACKUPS · Configuration Archive   ║
+╚══════════════════════════════════════╝</pre>
           <div class="header-actions">
-            <select id="backupTagSelect" class="select-styled" onchange="filterBackupCenters()" style="margin-right:8px">
-              <option value="">All Tags</option>
-              <option value="minerd">MINERD</option>
-              <option value="transi">TRANSI</option>
-              <option value="unphu">UNPHU</option>
-              <option value="lanco">LANCO</option>
-            </select>
-            <select id="backupCenterSelect" class="select-styled" onchange="loadBackups()">
-              <option value="">Select a center…</option>
-            </select>
-            <button class="btn-primary" id="runTagBackup" onclick="runTagBackup()" style="margin-left:8px">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-              Run by Tag
-            </button>
+            <select id="backupTagSelect" class="select-term" onchange="filterBackupCenters()"><option value="">▸ All Tags</option><option value="minerd">▸ MINERD</option><option value="transi">▸ TRANSI</option><option value="unphu">▸ UNPHU</option><option value="lanco">▸ LANCO</option></select>
+            <select id="backupCenterSelect" class="select-term" onchange="loadBackups()"><option value="">Select center…</option></select>
+            <button class="btn-term" id="runTagBackup" onclick="runTagBackup()">▶ RUN BY TAG</button>
           </div>
         </div>
-        <div class="glass-card">
+        <div class="term-card">
           <div class="table-wrapper">
-            <table>
-              <thead><tr><th>Date</th><th>File</th><th>Checksum</th><th>Size</th><th>Status</th><th>Actions</th></tr></thead>
-              <tbody id="backupsBody"></tbody>
-            </table>
+            <table><thead><tr><th>Date</th><th>File</th><th>Checksum</th><th>Size</th><th>Status</th><th>Actions</th></tr></thead><tbody id="backupsBody"></tbody></table>
             <p id="backupsEmpty" class="empty-state">Select a center to view its backups</p>
           </div>
         </div>
@@ -290,18 +288,14 @@
 
       <!-- EVENTS TAB -->
       <section id="tab-events" class="tab-panel">
-        <div class="page-header">
-          <div>
-            <h2 class="page-title">Event Log</h2>
-            <p class="page-subtitle">Activity and alert history</p>
-          </div>
+        <div class="term-section-header">
+          <pre class="section-ascii">╔══════════════════════════════════════╗
+║  ◆ EVENTS · Activity Log             ║
+╚══════════════════════════════════════╝</pre>
         </div>
-        <div class="glass-card">
+        <div class="term-card">
           <div class="table-wrapper">
-            <table>
-              <thead><tr><th>Timestamp</th><th>Center</th><th>Type</th><th>Message</th></tr></thead>
-              <tbody id="eventsBody"></tbody>
-            </table>
+            <table><thead><tr><th>Timestamp</th><th>Center</th><th>Type</th><th>Message</th></tr></thead><tbody id="eventsBody"></tbody></table>
             <p id="eventsEmpty" class="empty-state hidden">No events recorded yet</p>
           </div>
         </div>
@@ -309,42 +303,25 @@
 
       <!-- USERS TAB -->
       <section id="tab-users" class="tab-panel">
-        <div class="page-header">
-          <div>
-            <h2 class="page-title">User Management</h2>
-            <p class="page-subtitle">Manage access and permissions</p>
-          </div>
-          <button class="btn-primary" onclick="toggleUserForm()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Create User
-          </button>
+        <div class="term-section-header">
+          <pre class="section-ascii">╔══════════════════════════════════════╗
+║  ◆ USERS · Access Management         ║
+╚══════════════════════════════════════╝</pre>
+          <button class="btn-term" onclick="toggleUserForm()">+ CREATE USER</button>
         </div>
-        <div id="addUserForm" class="glass-card form-card collapsed">
-          <h3 class="card-title">New User</h3>
+        <div id="addUserForm" class="term-card form-card collapsed">
+          <div class="term-card-header">┌── New User ──</div>
           <div class="form-grid-3">
             <div class="input-group"><label>Username *</label><input id="userName" placeholder="Enter username" /></div>
             <div class="input-group"><label>Password *</label><input id="userPassword" type="password" placeholder="Min. 6 characters" /></div>
-            <div class="input-group">
-              <label>Role</label>
-              <select id="userRole" class="select-styled">
-                <option value="operator">Operator</option>
-                <option value="viewer">Viewer</option>
-                <option value="admin">Admin</option>
-              </select>
-            </div>
+            <div class="input-group"><label>Role</label><select id="userRole" class="select-term"><option value="operator">Operator</option><option value="viewer">Viewer</option><option value="admin">Admin</option></select></div>
           </div>
-          <div class="btn-group" style="margin-top:12px">
-            <button class="btn-primary" onclick="createUser()">Create User</button>
-            <button class="btn-ghost" onclick="toggleUserForm()">Cancel</button>
-          </div>
+          <div class="btn-group" style="margin-top:12px"><button class="btn-term" onclick="createUser()">CREATE</button><button class="btn-term-ghost" onclick="toggleUserForm()">CANCEL</button></div>
           <div id="userMessage" class="form-message"></div>
         </div>
-        <div class="glass-card">
+        <div class="term-card">
           <div class="table-wrapper">
-            <table>
-              <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
-              <tbody id="usersBody"></tbody>
-            </table>
+            <table><thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead><tbody id="usersBody"></tbody></table>
           </div>
         </div>
       </section>
@@ -354,41 +331,20 @@
   <!-- ═══ EDIT CENTER MODAL ═══ -->
   <div id="editModal" class="modal-overlay hidden">
     <div class="modal-card">
-      <div class="modal-header">
-        <h3>Edit Center</h3>
-        <button class="modal-close" onclick="closeEditModal()">&times;</button>
-      </div>
+      <div class="modal-header"><h3>┌── Edit Center ──</h3><button class="modal-close" onclick="closeEditModal()">×</button></div>
       <div class="form-grid-3">
         <input type="hidden" id="editCenterId" />
         <div class="input-group"><label>Name</label><input id="editName" /></div>
         <div class="input-group"><label>FortiGate IP</label><input id="editIp" /></div>
-        <div class="input-group">
-          <label>Tag</label>
-          <select id="editTag" class="select-styled">
-            <option value="">No Tag</option>
-            <option value="minerd">MINERD</option>
-            <option value="transi">TRANSI</option>
-            <option value="unphu">UNPHU</option>
-            <option value="lanco">LANCO</option>
-          </select>
-        </div>
-        <div class="input-group">
-          <label>Auth Mode</label>
-          <select id="editAuthMode" class="select-styled" onchange="toggleEditAuthFields()">
-            <option value="credentials">Username / Password</option>
-            <option value="token">API Token</option>
-          </select>
-        </div>
+        <div class="input-group"><label>Tag</label><select id="editTag" class="select-term"><option value="">No Tag</option><option value="minerd">MINERD</option><option value="transi">TRANSI</option><option value="unphu">UNPHU</option><option value="lanco">LANCO</option></select></div>
+        <div class="input-group"><label>Auth Mode</label><select id="editAuthMode" class="select-term" onchange="toggleEditAuthFields()"><option value="credentials">Username / Password</option><option value="token">API Token</option></select></div>
         <div class="input-group edit-cred-field"><label>Username</label><input id="editFgUser" /></div>
         <div class="input-group edit-cred-field"><label>Password</label><input id="editFgPass" type="password" placeholder="Leave blank to keep" /></div>
         <div class="input-group edit-token-field" style="display:none"><label>API Token</label><input id="editToken" type="password" placeholder="Leave blank to keep" /></div>
         <div class="input-group"><label>Location</label><input id="editLocation" /></div>
         <div class="input-group"><label>Model</label><input id="editModel" /></div>
       </div>
-      <div class="btn-group" style="margin-top:16px">
-        <button class="btn-primary" onclick="saveEditCenter()">Save Changes</button>
-        <button class="btn-ghost" onclick="closeEditModal()">Cancel</button>
-      </div>
+      <div class="btn-group" style="margin-top:16px"><button class="btn-term" onclick="saveEditCenter()">SAVE CHANGES</button><button class="btn-term-ghost" onclick="closeEditModal()">CANCEL</button></div>
       <div id="editMessage" class="form-message"></div>
     </div>
   </div>
@@ -397,13 +353,10 @@
   <div id="contextMenu" class="context-menu hidden">
     <button onclick="contextEditCenter()">✏️ Edit Center</button>
     <button onclick="contextRunBackup()">▶️ Run Backup</button>
-    <hr />
-    <button class="danger" onclick="contextDeleteCenter()">🗑️ Delete Center</button>
+    <hr /><button class="danger" onclick="contextDeleteCenter()">🗑️ Delete Center</button>
   </div>
 
-  <!-- TOAST NOTIFICATIONS -->
   <div id="toastContainer" class="toast-container"></div>
-
   <script src="app.js"></script>
 </body>
 </html>
