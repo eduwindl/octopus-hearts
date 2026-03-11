@@ -84,6 +84,14 @@ def init_environment(base_dir: Path) -> None:
 
 def start_api_server(port: int = 8787):
     try:
+        # CRITICAL: When PyInstaller builds with console=False, sys.stdout and
+        # sys.stderr are None.  Uvicorn's logging formatter calls
+        # sys.stderr.isatty() which crashes.  Redirect to devnull first.
+        if sys.stdout is None:
+            sys.stdout = open(os.devnull, "w")
+        if sys.stderr is None:
+            sys.stderr = open(os.devnull, "w")
+
         import uvicorn
         from backend.api import app
         uvicorn.run(
@@ -94,8 +102,7 @@ def start_api_server(port: int = 8787):
         )
     except BaseException as e:
         import traceback
-        import sys
-        
+
         err_path = get_storage_dir(get_app_dir()) / "api-error.log"
         err_path.write_text("API Thread Exception / BaseException:\n" + traceback.format_exc() + f"\nError type: {type(e)}")
 
@@ -147,6 +154,12 @@ def start_scheduler():
 # ════════════════════════════════════════════════════════════════════════
 
 def main():
+    # Fix None streams for windowed PyInstaller apps (console=False)
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w")
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w")
+
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s [%(levelname)s] %(message)s")
     log = logging.getLogger("fgbm")
