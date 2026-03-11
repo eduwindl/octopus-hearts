@@ -30,6 +30,10 @@ def fetch_config_with_credentials(fortigate_ip: str, username: str, password: st
     base_url = f"https://{fortigate_ip}"
     session = requests.Session()
     session.verify = settings.fortigate_verify_ssl
+    session.headers.update({
+        "Origin": base_url,
+        "Referer": f"{base_url}/login",
+    })
 
     # Step 1: Login via /logincheck
     login_response = session.post(
@@ -38,18 +42,27 @@ def fetch_config_with_credentials(fortigate_ip: str, username: str, password: st
         timeout=settings.fortigate_timeout_seconds,
     )
 
-    # FortiOS returns 200 even on failed login. With ajax=1, success is "1".
     response_text = login_response.text.strip()
-    if not response_text.startswith("1"):
-        raise ConnectionError(f"Login failed for {fortigate_ip} with user '{username}'. Response: {response_text[:40]}")
 
-    # Step 2: Grab the CSRF token from cookies
+    # Step 2: Grab the CSRF token from cookies and verify authentication
     cookies = session.cookies.get_dict()
     csrf_token = None
+    has_auth_cookie = False
+    
     for name, value in cookies.items():
         if "ccsrftoken" in name.lower():
             csrf_token = value.strip('"')
-            break
+            has_auth_cookie = True
+        elif name.startswith("APSCOOKIE_"):
+            has_auth_cookie = True
+
+    # FortiOS returns 200 even on failed login. With ajax=1, explicit success is "1".
+    # However, some configurations (or disclaimers) return HTML instead. We check if an auth cookie was set.
+    if not response_text.startswith("1") and not has_auth_cookie:
+        if "<html" in response_text.lower() or "<!doctype" in response_text.lower():
+            raise ConnectionError(f"Login failed for {fortigate_ip} with user '{username}'. (Invalid credentials or FortiOS blocked the login API request).")
+        else:
+            raise ConnectionError(f"Login failed or intercepted for {fortigate_ip} with user '{username}'. Response snippet: {response_text[:100]}")
 
     headers = {}
     if csrf_token:
@@ -99,6 +112,10 @@ def restore_config_with_credentials(fortigate_ip: str, username: str, password: 
     base_url = f"https://{fortigate_ip}"
     session = requests.Session()
     session.verify = settings.fortigate_verify_ssl
+    session.headers.update({
+        "Origin": base_url,
+        "Referer": f"{base_url}/login",
+    })
 
     # Login
     login_response = session.post(
@@ -108,15 +125,23 @@ def restore_config_with_credentials(fortigate_ip: str, username: str, password: 
     )
 
     response_text = login_response.text.strip()
-    if not response_text.startswith("1"):
-        raise ConnectionError(f"Login failed for {fortigate_ip} with user '{username}'. Response: {response_text[:40]}")
 
     cookies = session.cookies.get_dict()
     csrf_token = None
+    has_auth_cookie = False
+    
     for name, value in cookies.items():
         if "ccsrftoken" in name.lower():
             csrf_token = value.strip('"')
-            break
+            has_auth_cookie = True
+        elif name.startswith("APSCOOKIE_"):
+            has_auth_cookie = True
+
+    if not response_text.startswith("1") and not has_auth_cookie:
+        if "<html" in response_text.lower() or "<!doctype" in response_text.lower():
+            raise ConnectionError(f"Login failed for {fortigate_ip} with user '{username}'. (Invalid credentials or FortiOS blocked the login API request).")
+        else:
+            raise ConnectionError(f"Login failed or intercepted for {fortigate_ip} with user '{username}'. Response snippet: {response_text[:100]}")
 
     headers = {}
     if csrf_token:
