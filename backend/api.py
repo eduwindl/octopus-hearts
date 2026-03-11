@@ -30,13 +30,28 @@ app.add_middleware(
     allow_headers=["*"] ,
 )
 
-static_dir = os.getenv("FGBM_STATIC_DIR")
-if static_dir and Path(static_dir).exists():
-    app.mount("/ui", StaticFiles(directory=static_dir, html=True), name="ui")
-else:
-    default_static = Path(__file__).resolve().parent.parent / "frontend" / "dashboard"
-    if default_static.exists():
-        app.mount("/ui", StaticFiles(directory=default_static, html=True), name="ui")
+import sys
+
+def _find_static_dir():
+    """Find the frontend/dashboard static directory, checking multiple locations."""
+    # 1. Explicit env var (set by desktop_app.py)
+    env_dir = os.getenv("FGBM_STATIC_DIR")
+    if env_dir and Path(env_dir).exists():
+        return Path(env_dir)
+    # 2. PyInstaller bundle directory (_MEIPASS)
+    if getattr(sys, "frozen", False):
+        meipass = Path(sys._MEIPASS) / "frontend" / "dashboard"
+        if meipass.exists():
+            return meipass
+    # 3. Relative to source file (dev mode)
+    src = Path(__file__).resolve().parent.parent / "frontend" / "dashboard"
+    if src.exists():
+        return src
+    return None
+
+_static = _find_static_dir()
+if _static:
+    app.mount("/ui", StaticFiles(directory=_static, html=True), name="ui")
 
 
 def get_db():
@@ -81,12 +96,8 @@ def on_startup():
 
 @app.get("/")
 def root():
-    static_root = os.getenv("FGBM_STATIC_DIR")
-    if static_root and Path(static_root).exists():
-        return FileResponse(Path(static_root) / "index.html")
-    default_static = Path(__file__).resolve().parent.parent / "frontend" / "dashboard"
-    if default_static.exists():
-        return FileResponse(default_static / "index.html")
+    if _static and (_static / "index.html").exists():
+        return FileResponse(_static / "index.html")
     return {"status": "ok"}
 
 

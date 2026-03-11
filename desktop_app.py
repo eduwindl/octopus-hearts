@@ -27,6 +27,14 @@ def get_app_dir() -> Path:
     return Path(__file__).resolve().parent
 
 
+def get_bundle_dir() -> Path:
+    """Return the directory where PyInstaller extracted bundled data files.
+    For frozen apps this is sys._MEIPASS; for dev it's the source root."""
+    if getattr(sys, "frozen", False):
+        return Path(sys._MEIPASS)
+    return Path(__file__).resolve().parent
+
+
 def get_storage_dir(app_dir: Path) -> Path:
     try:
         test_file = app_dir / ".write_test"
@@ -62,6 +70,12 @@ def init_environment(base_dir: Path) -> None:
     db_path = data_dir / "fgbm.db"
     os.environ.setdefault("DATABASE_URL", f"sqlite:///{db_path.as_posix()}")
     os.environ.setdefault("BACKUPS_ROOT", str(backups_dir))
+
+    # Critical: tell the API where to find the bundled frontend files
+    bundle_dir = get_bundle_dir()
+    static_dir = bundle_dir / "frontend" / "dashboard"
+    if static_dir.exists():
+        os.environ["FGBM_STATIC_DIR"] = str(static_dir)
 
 
 # ════════════════════════════════════════════════════════════════════════
