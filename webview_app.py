@@ -9,6 +9,8 @@ from pathlib import Path
 import requests
 import uvicorn
 import webview
+import tkinter as tk
+from tkinter import messagebox
 
 
 APP_TITLE = "FortiGate Backup Manager"
@@ -90,15 +92,25 @@ def main():
     webview.start()
 
 
+def write_log(app_dir: Path, message: str) -> Path:
+    try:
+        log_path = app_dir / "fgbm-error.txt"
+        log_path.write_text(message)
+        return log_path
+    except Exception:
+        storage_dir = get_storage_dir(app_dir)
+        storage_dir.mkdir(parents=True, exist_ok=True)
+        log_path = storage_dir / "fgbm-error.txt"
+        log_path.write_text(message)
+        return log_path
+
+
 if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        storage_dir = get_storage_dir(get_app_dir())
-        storage_dir.mkdir(parents=True, exist_ok=True)
-        log_path = storage_dir / "fgbm.log"
-        try:
-            log_path.write_text(str(exc))
-        except Exception:
-            pass
-        raise
+        app_dir = get_app_dir()
+        log_path = write_log(app_dir, str(exc))
+        root = tk.Tk()
+        root.withdraw()
+        messagebox.showerror("Fatal error", f"Application failed to start.\n\nLog: {log_path}")

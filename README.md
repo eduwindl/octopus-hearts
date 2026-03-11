@@ -12,7 +12,7 @@ The app will create a local database and start storing backups.
 
 ## First Run
 
-On first launch, you will be asked to create an admin user. Passwords are stored securely using bcrypt.
+On first launch, you will be asked to create an admin user. Passwords are stored securely using PBKDF2.
 
 ## Features
 
@@ -36,3 +36,4 @@ If Inno Setup is installed, it will also create a wizard installer `FGBM-Setup.e
 
 - Backups are stored in `./backups`
 - Database is stored in `./data/fgbm.db`
+- If the app fails to start, check `fgbm-error.txt` next to the EXE. If not writable, it will be in `C:\Users\TU_USUARIO\AppData\Local\FGBM\fgbm-error.txt`.
