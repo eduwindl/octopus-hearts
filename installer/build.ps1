@@ -15,7 +15,7 @@ try {
   python -m pip install --user pyinstaller
 
   $addData = "frontend\\dashboard;frontend\\dashboard"
-  python -m PyInstaller --noconfirm --onefile --name fgbm --add-data $addData --collect-all charset_normalizer --collect-all webview webview_app.py
+  python -m PyInstaller --noconfirm --onefile --noconsole --name fgbm --add-data $addData --collect-all charset_normalizer --collect-all webview webview_app.py
 
   if (-not (Test-Path $distDir)) { New-Item -ItemType Directory -Force -Path $distDir | Out-Null }
   Copy-Item .env.example (Join-Path $distDir ".env.example") -Force
