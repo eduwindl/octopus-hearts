@@ -69,15 +69,21 @@ def init_environment(base_dir: Path) -> None:
 # ════════════════════════════════════════════════════════════════════════
 
 def start_api_server(port: int = 8787):
-    """Start the FastAPI server in a daemon thread."""
-    import uvicorn
-    from backend.api import app
-    uvicorn.run(
-        app,
-        host="127.0.0.1",
-        port=port,
-        log_level="warning",
-    )
+    try:
+        import uvicorn
+        from backend.api import app
+        uvicorn.run(
+            app,
+            host="127.0.0.1",
+            port=port,
+            log_level="warning",
+        )
+    except BaseException as e:
+        import traceback
+        import sys
+        
+        err_path = get_storage_dir(get_app_dir()) / "api-error.log"
+        err_path.write_text("API Thread Exception / BaseException:\n" + traceback.format_exc() + f"\nError type: {type(e)}")
 
 
 def wait_for_api(port: int, timeout: int = 20) -> bool:
@@ -152,11 +158,17 @@ def main():
     # Start scheduler
     scheduler = start_scheduler()
 
-    # Start API server
-    port = 8787
+    # Get free dynamic port
+    import socket
+    def get_free_port() -> int:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.bind(("127.0.0.1", 0))
+            return s.getsockname()[1]
+            
+    port = get_free_port()
     api_thread = threading.Thread(target=start_api_server, args=(port,), daemon=True)
     api_thread.start()
-    log.info("Waiting for API on port %d…", port)
+    log.info("Waiting for API on port %d...", port)
 
     if not wait_for_api(port):
         log.error("API server failed to start")
