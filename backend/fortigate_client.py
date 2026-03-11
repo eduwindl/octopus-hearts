@@ -21,7 +21,20 @@ def fetch_config(fortigate_ip: str, api_token: str) -> bytes:
         timeout=settings.fortigate_timeout_seconds,
         verify=settings.fortigate_verify_ssl,
     )
-    response.raise_for_status()
+    # Fallback to VDOM scope if global is denied
+    if response.status_code in (403, 401):
+        params_fallback = {"scope": "vdom", "vdom": "root"}
+        fallback_res = requests.get(url, headers=headers, params=params_fallback, timeout=settings.fortigate_timeout_seconds, verify=settings.fortigate_verify_ssl)
+        if fallback_res.ok:
+            response = fallback_res
+
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        if response.status_code in (401, 403):
+            raise ConnectionError(f"Permission denied ({response.status_code}). Token lacks 'Super_Admin' privileges or correct VDOM scope.") from e
+        raise ConnectionError(f"API Error {response.status_code}: {e}") from e
+
     return response.content
 
 
@@ -89,7 +102,13 @@ def fetch_config_with_credentials(fortigate_ip: str, username: str, password: st
         if fallback_response.ok:
             response = fallback_response
 
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        if response.status_code in (401, 403):
+            raise ConnectionError(f"Permission denied ({response.status_code}). User '{username}' lacks 'Super_Admin' privileges or REST API access is blocked.") from e
+        raise ConnectionError(f"API Error {response.status_code}: {e}") from e
+
     content = response.content
 
     # Step 4: Logout cleanly
@@ -117,7 +136,22 @@ def restore_config(fortigate_ip: str, api_token: str, content: bytes) -> None:
         timeout=settings.fortigate_timeout_seconds,
         verify=settings.fortigate_verify_ssl,
     )
-    response.raise_for_status()
+
+    if response.status_code in (403, 401):
+        params_fallback = {"scope": "vdom", "vdom": "root"}
+        files_fallback = {"file": ("config.conf", content)}
+        fallback_res = requests.post(
+            url, headers=headers, params=params_fallback, files=files_fallback, timeout=settings.fortigate_timeout_seconds, verify=settings.fortigate_verify_ssl
+        )
+        if fallback_res.ok:
+            response = fallback_res
+
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        if response.status_code in (401, 403):
+            raise ConnectionError(f"Permission denied ({response.status_code}). Token lacks 'Super_Admin' privileges or VDOM restricts upload.") from e
+        raise ConnectionError(f"API Error {response.status_code}: {e}") from e
 
 
 def restore_config_with_credentials(fortigate_ip: str, username: str, password: str, content: bytes) -> None:
@@ -186,7 +220,12 @@ def restore_config_with_credentials(fortigate_ip: str, username: str, password: 
         if fallback_response.ok:
             response = fallback_response
 
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except requests.exceptions.HTTPError as e:
+        if response.status_code in (401, 403):
+            raise ConnectionError(f"Permission denied ({response.status_code}). User '{username}' lacks 'Super_Admin' privileges or REST API restrict uploads.") from e
+        raise ConnectionError(f"API Error {response.status_code}: {e}") from e
 
     try:
         session.post(f"{base_url}{LOGOUT_ENDPOINT}", data={"ajax": "1"}, headers=headers, timeout=5)
