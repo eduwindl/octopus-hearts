@@ -395,7 +395,9 @@ def run_backup_one(center_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Center not found")
     backup = run_backup_for_center(db, center)
     if not backup:
-        raise HTTPException(status_code=500, detail="Backup failed")
+        event = db.query(models.Event).filter(models.Event.center_id == center.id, models.Event.event_type == "BACKUP_FAILED").order_by(models.Event.timestamp.desc()).first()
+        err_msg = event.message if event else "Unknown backend error"
+        raise HTTPException(status_code=500, detail=f"Backup failed: {err_msg}")
     return {"backup_id": backup.id}
 
 
