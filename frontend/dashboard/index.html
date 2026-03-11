@@ -345,6 +345,22 @@
     </main>
   </div>
 
+  <!-- ═══ ERROR MODAL ═══ -->
+    <div id="errorModal" class="modal-overlay hidden">
+      <div class="modal-card" style="border-color: var(--red); box-shadow: 0 0 60px rgba(239,68,68,0.15); max-width: 700px;">
+        <div class="modal-header">
+          <h3 style="color: var(--red);" id="errorModalTitle">ERROR</h3>
+          <button class="modal-close" onclick="closeErrorModal()">×</button>
+        </div>
+        <div style="padding: 10px 0;">
+          <pre id="errorModalMessage" style="white-space: pre-wrap; word-wrap: break-word; font-family: var(--mono); font-size: 0.82rem; color: var(--text); background: rgba(5,20,5,0.8); padding: 16px; border-radius: 6px; border: 1px solid rgba(239,68,68,0.3); max-height: 400px; overflow-y: auto;"></pre>
+        </div>
+        <div class="form-actions" style="justify-content: flex-end; margin-top: 16px;">
+          <button class="btn-term-ghost" onclick="closeErrorModal()" style="border-color: rgba(239,68,68,0.5); color: var(--red);">DISMISS</button>
+        </div>
+      </div>
+    </div>
+
   <!-- ═══ EDIT CENTER MODAL ═══ -->
   <div id="editModal" class="modal-overlay hidden">
     <div class="modal-card">

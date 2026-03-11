@@ -22,9 +22,26 @@ async function api(path, opts = {}) {
   if (!r.ok) {
     if (r.status === 401) { showAuth(true); throw new Error("Unauthorized"); }
     const msg = await r.text();
-    throw new Error(msg);
+    let detailMsg = msg;
+    try {
+      const parsed = JSON.parse(msg);
+      if (parsed.detail) detailMsg = parsed.detail;
+    } catch (e) { /* keep raw text */ }
+    throw new Error(detailMsg);
   }
   return r.json();
+}
+
+function showErrorModal(title, message) {
+  const overlay = document.getElementById("errorModal");
+  if (!overlay) return toast(message, "error");
+  document.getElementById("errorModalTitle").textContent = title;
+  document.getElementById("errorModalMessage").textContent = message;
+  overlay.classList.remove("hidden");
+}
+
+function closeErrorModal() {
+  document.getElementById("errorModal").classList.add("hidden");
 }
 
 function fmtDate(v) {
@@ -548,7 +565,7 @@ async function runBackup(centerId) {
     toast("Backup completed!", "success");
     loadCenters();
     loadDashboard();
-  } catch (err) { toast(`Backup failed: ${err.message}`, "error"); }
+  } catch (err) { showErrorModal("BACKUP FAIL", err.message); }
 }
 
 async function runAllBackups() {
@@ -561,7 +578,7 @@ async function runAllBackups() {
     toast("All backups completed!", "success");
     loadCenters();
     loadDashboard();
-  } catch (err) { toast(`Backup run failed: ${err.message}`, "error"); }
+  } catch (err) { showErrorModal("BULK RUN FAILED", err.message); }
   finally {
     btn.disabled = false;
     btn.innerHTML = '▶ RUN ALL BACKUPS';
@@ -582,7 +599,7 @@ async function runTagBackup() {
     const result = await api(`/backups/run-by-tag/${tag}`, { method: "POST" });
     toast(`${tag.toUpperCase()}: ${result.ok} OK, ${result.failed} failed out of ${result.total}`, "success");
     loadDashboard();
-  } catch (err) { toast(`Tag backup failed: ${err.message}`, "error"); }
+  } catch (err) { showErrorModal("TAG BACKUP FAILED", err.message); }
   finally {
     btn.disabled = false;
     btn.innerHTML = '▶ RUN BY TAG';
