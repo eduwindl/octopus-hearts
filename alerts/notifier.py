@@ -31,7 +31,10 @@ def send_slack(message: str) -> None:
 
 
 def notify_failure(center_name: str, reason: str) -> None:
-    subject = f"Backup failed: {center_name}"
-    body = f"Center: {center_name}\nReason: {reason}"
-    send_email(subject, body)
-    send_slack(body)
+    try:
+        subject = f"Backup failed: {center_name}"
+        body = f"Center: {center_name}\nReason: {reason}"
+        send_email(subject, body)
+        send_slack(body)
+    except Exception as e:
+        print(f"Failed to send notification: {e}")

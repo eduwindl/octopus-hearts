@@ -38,17 +38,13 @@ def fetch_config_with_credentials(fortigate_ip: str, username: str, password: st
         timeout=settings.fortigate_timeout_seconds,
     )
 
-    # FortiOS returns 200 even on failed login; check for the APSCOOKIE
-    cookies = session.cookies.get_dict()
-    if "APSCOOKIE_" not in str(cookies) and "ccsrftoken" not in str(cookies):
-        # Some FortiOS versions use ccsrftoken in the cookie
-        for cookie_name in cookies:
-            if "ccsrftoken" in cookie_name.lower() or "apscookie" in cookie_name.lower():
-                break
-        else:
-            raise ConnectionError(f"Login failed for {fortigate_ip} with user '{username}'. Check credentials.")
+    # FortiOS returns 200 even on failed login. With ajax=1, success is "1".
+    response_text = login_response.text.strip()
+    if not response_text.startswith("1"):
+        raise ConnectionError(f"Login failed for {fortigate_ip} with user '{username}'. Response: {response_text[:40]}")
 
     # Step 2: Grab the CSRF token from cookies
+    cookies = session.cookies.get_dict()
     csrf_token = None
     for name, value in cookies.items():
         if "ccsrftoken" in name.lower():
@@ -105,11 +101,15 @@ def restore_config_with_credentials(fortigate_ip: str, username: str, password: 
     session.verify = settings.fortigate_verify_ssl
 
     # Login
-    session.post(
+    login_response = session.post(
         f"{base_url}{LOGIN_ENDPOINT}",
         data={"username": username, "secretkey": password, "ajax": "1"},
         timeout=settings.fortigate_timeout_seconds,
     )
+
+    response_text = login_response.text.strip()
+    if not response_text.startswith("1"):
+        raise ConnectionError(f"Login failed for {fortigate_ip} with user '{username}'. Response: {response_text[:40]}")
 
     cookies = session.cookies.get_dict()
     csrf_token = None
