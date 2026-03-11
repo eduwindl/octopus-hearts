@@ -14,8 +14,14 @@ try {
   python -m pip install --user -r requirements.txt
   python -m pip install --user pyinstaller
 
-  $addData = "frontend\\dashboard;frontend\\dashboard"
-  python -m PyInstaller --noconfirm --onefile --noconsole --name fgbm --add-data $addData --collect-all charset_normalizer --collect-all webview webview_app.py
+  $addData = "frontend\dashboard;frontend\dashboard"
+  python -m PyInstaller --noconfirm --onefile --noconsole --name fgbm `
+    --add-data $addData `
+    --collect-all charset_normalizer `
+    --collect-all webview `
+    --hidden-import "passlib.handlers.pbkdf2" `
+    --hidden-import "passlib.handlers" `
+    desktop_app.py
 
   if (-not (Test-Path $distDir)) { New-Item -ItemType Directory -Force -Path $distDir | Out-Null }
   Copy-Item .env.example (Join-Path $distDir ".env.example") -Force
@@ -24,11 +30,11 @@ try {
   Pop-Location
 }
 
-Write-Host "Build complete. EXE located at dist\\fgbm.exe" -ForegroundColor Green
+Write-Host "Build complete. EXE located at dist\fgbm.exe" -ForegroundColor Green
 
 $iscc = Get-Command iscc -ErrorAction SilentlyContinue
 if (-not $iscc) {
-  $candidate = "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe"
+  $candidate = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
   if (Test-Path $candidate) {
     $iscc = $candidate
   }
@@ -38,7 +44,7 @@ if ($iscc) {
   Push-Location $root
   try {
     & $iscc setup.iss
-    Write-Host "Installer created: installer\\FGBM-Setup.exe" -ForegroundColor Green
+    Write-Host "Installer created: installer\FGBM-Setup.exe" -ForegroundColor Green
   } finally {
     Pop-Location
   }
