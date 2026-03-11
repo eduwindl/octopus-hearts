@@ -6,45 +6,51 @@
   <title>FortiGate Backup Manager</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- ═══ AUTH OVERLAY ═══ -->
-  <div id="authOverlay" class="auth-overlay">
-    <div class="auth-bg-animation">
-      <div class="auth-orb orb-1"></div>
-      <div class="auth-orb orb-2"></div>
-      <div class="auth-orb orb-3"></div>
-    </div>
-    <div class="auth-card slide-up">
-      <div class="auth-logo">
-        <div class="shield-icon">
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-            <path d="M24 4L6 12V22C6 33.1 13.7 43.3 24 46C34.3 43.3 42 33.1 42 22V12L24 4Z" fill="url(#shield-grad)" opacity="0.15"/>
-            <path d="M24 4L6 12V22C6 33.1 13.7 43.3 24 46C34.3 43.3 42 33.1 42 22V12L24 4Z" stroke="url(#shield-grad)" stroke-width="2" fill="none"/>
-            <path d="M18 24L22 28L30 20" stroke="url(#shield-grad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <defs><linearGradient id="shield-grad" x1="6" y1="4" x2="42" y2="46"><stop stop-color="#60a5fa"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs>
-          </svg>
+  <!-- ═══ TERMINAL LOGIN SCREEN ═══ -->
+  <div id="authOverlay" class="terminal-overlay">
+    <div class="scanlines"></div>
+    <div class="terminal-container">
+      <div class="terminal-window">
+        <div class="terminal-header">
+          <div class="terminal-dots">
+            <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+          </div>
+          <span class="terminal-title">root@fgbm-secure:~</span>
+          <div class="terminal-dots" style="visibility:hidden">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+          </div>
         </div>
-        <h1>FortiGate Backup Manager</h1>
-        <p class="auth-version">v1.3.0 · Enterprise Configuration Backup</p>
+        <div class="terminal-body" id="terminalBody">
+          <pre class="ascii-art" id="asciiArt"></pre>
+          <div id="bootLog" class="boot-log"></div>
+          <div id="loginPrompt" class="login-section hidden">
+            <div class="prompt-line">
+              <span class="prompt-user">root@fgbm</span><span class="prompt-sep">:</span><span class="prompt-path">~</span><span class="prompt-dollar">$</span>
+              <span class="prompt-cmd">login --secure</span>
+            </div>
+            <form id="authForm" onsubmit="return false;">
+              <div class="terminal-input-row">
+                <label class="terminal-label">USERNAME:</label>
+                <input id="authUser" type="text" class="terminal-input" autocomplete="username" autofocus />
+              </div>
+              <div class="terminal-input-row">
+                <label class="terminal-label">PASSWORD:</label>
+                <input id="authPass" type="password" class="terminal-input" autocomplete="current-password" />
+              </div>
+              <div class="terminal-input-row" style="margin-top:12px">
+                <button id="authSubmit" class="terminal-btn" type="submit">
+                  [ AUTHENTICATE ]
+                </button>
+              </div>
+              <div id="authError" class="terminal-error"></div>
+            </form>
+          </div>
+        </div>
       </div>
-      <form id="authForm" onsubmit="return false;">
-        <div class="input-group">
-          <label for="authUser">Username</label>
-          <input id="authUser" type="text" autocomplete="username" placeholder="Enter your username" />
-        </div>
-        <div class="input-group">
-          <label for="authPass">Password</label>
-          <input id="authPass" type="password" autocomplete="current-password" placeholder="Enter your password" />
-        </div>
-        <button id="authSubmit" class="btn-primary btn-full" type="submit">
-          <span class="btn-text">Sign In</span>
-          <span class="btn-loader hidden"></span>
-        </button>
-        <div id="authError" class="auth-error"></div>
-      </form>
     </div>
   </div>
 
@@ -57,7 +63,7 @@
           <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
             <path d="M24 4L6 12V22C6 33.1 13.7 43.3 24 46C34.3 43.3 42 33.1 42 22V12L24 4Z" fill="url(#sb-grad)" opacity="0.2"/>
             <path d="M24 4L6 12V22C6 33.1 13.7 43.3 24 46C34.3 43.3 42 33.1 42 22V12L24 4Z" stroke="url(#sb-grad)" stroke-width="2" fill="none"/>
-            <defs><linearGradient id="sb-grad" x1="6" y1="4" x2="42" y2="46"><stop stop-color="#60a5fa"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs>
+            <defs><linearGradient id="sb-grad" x1="6" y1="4" x2="42" y2="46"><stop stop-color="#22c55e"/><stop offset="1" stop-color="#10b981"/></linearGradient></defs>
           </svg>
         </div>
         <span class="brand-text">FGBM</span>
@@ -160,7 +166,7 @@
         <div class="page-header">
           <div>
             <h2 class="page-title">Centers</h2>
-            <p class="page-subtitle">Manage your FortiGate firewalls</p>
+            <p class="page-subtitle">Manage your FortiGate firewalls · Right-click a row to edit</p>
           </div>
           <div class="header-actions">
             <select id="tagFilterCenters" class="select-styled" onchange="loadCenters()" style="margin-right:8px">
@@ -227,7 +233,7 @@
             Paste a JSON array of centers. Each entry needs: <code>name</code>, <code>fortigate_ip</code>. Optional: <code>tag</code>, <code>location</code>, <code>model</code>, <code>fortigate_username</code>, <code>fortigate_password</code>.
           </p>
           <div class="input-group">
-            <textarea id="bulkJson" rows="8" placeholder='[{"name":"Centro 1","fortigate_ip":"10.0.0.1","tag":"minerd","fortigate_username":"admin","fortigate_password":"pass123"}]' style="width:100%;font-family:monospace;font-size:0.85rem;background:var(--bg-secondary);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:12px;resize:vertical"></textarea>
+            <textarea id="bulkJson" rows="8" placeholder='[{"name":"Centro 1","fortigate_ip":"10.0.0.1","tag":"minerd","fortigate_username":"admin","fortigate_password":"pass123"}]' style="width:100%;font-family:'JetBrains Mono',monospace;font-size:0.85rem;background:var(--bg-secondary);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:12px;resize:vertical"></textarea>
           </div>
           <div class="btn-group" style="margin-top:12px">
             <button class="btn-primary" onclick="bulkImport()">Import All</button>
@@ -313,7 +319,6 @@
             Create User
           </button>
         </div>
-
         <div id="addUserForm" class="glass-card form-card collapsed">
           <h3 class="card-title">New User</h3>
           <div class="form-grid-3">
@@ -334,7 +339,6 @@
           </div>
           <div id="userMessage" class="form-message"></div>
         </div>
-
         <div class="glass-card">
           <div class="table-wrapper">
             <table>
@@ -345,6 +349,56 @@
         </div>
       </section>
     </main>
+  </div>
+
+  <!-- ═══ EDIT CENTER MODAL ═══ -->
+  <div id="editModal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Edit Center</h3>
+        <button class="modal-close" onclick="closeEditModal()">&times;</button>
+      </div>
+      <div class="form-grid-3">
+        <input type="hidden" id="editCenterId" />
+        <div class="input-group"><label>Name</label><input id="editName" /></div>
+        <div class="input-group"><label>FortiGate IP</label><input id="editIp" /></div>
+        <div class="input-group">
+          <label>Tag</label>
+          <select id="editTag" class="select-styled">
+            <option value="">No Tag</option>
+            <option value="minerd">MINERD</option>
+            <option value="transi">TRANSI</option>
+            <option value="unphu">UNPHU</option>
+            <option value="lanco">LANCO</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label>Auth Mode</label>
+          <select id="editAuthMode" class="select-styled" onchange="toggleEditAuthFields()">
+            <option value="credentials">Username / Password</option>
+            <option value="token">API Token</option>
+          </select>
+        </div>
+        <div class="input-group edit-cred-field"><label>Username</label><input id="editFgUser" /></div>
+        <div class="input-group edit-cred-field"><label>Password</label><input id="editFgPass" type="password" placeholder="Leave blank to keep" /></div>
+        <div class="input-group edit-token-field" style="display:none"><label>API Token</label><input id="editToken" type="password" placeholder="Leave blank to keep" /></div>
+        <div class="input-group"><label>Location</label><input id="editLocation" /></div>
+        <div class="input-group"><label>Model</label><input id="editModel" /></div>
+      </div>
+      <div class="btn-group" style="margin-top:16px">
+        <button class="btn-primary" onclick="saveEditCenter()">Save Changes</button>
+        <button class="btn-ghost" onclick="closeEditModal()">Cancel</button>
+      </div>
+      <div id="editMessage" class="form-message"></div>
+    </div>
+  </div>
+
+  <!-- ═══ CONTEXT MENU ═══ -->
+  <div id="contextMenu" class="context-menu hidden">
+    <button onclick="contextEditCenter()">✏️ Edit Center</button>
+    <button onclick="contextRunBackup()">▶️ Run Backup</button>
+    <hr />
+    <button class="danger" onclick="contextDeleteCenter()">🗑️ Delete Center</button>
   </div>
 
   <!-- TOAST NOTIFICATIONS -->

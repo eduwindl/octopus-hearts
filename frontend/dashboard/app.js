@@ -1,11 +1,13 @@
 /* ═══════════════════════════════════════════════════════════════════
-   FortiGate Backup Manager – Frontend Logic v1.3.0
+   FortiGate Backup Manager – Frontend Logic v1.5.0
+   Terminal Theme + Edit Modal + Context Menu
    ═══════════════════════════════════════════════════════════════════ */
 
 const API = window.API_BASE || `http://localhost:${location.port || 8000}`;
 const AUTH_KEY = "fgbm_auth";
 let currentUser = null;
 let centersCache = [];
+let contextCenterData = null; // for right-click context menu
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
@@ -58,18 +60,81 @@ function toast(message, type = "info") {
   const c = document.getElementById("toastContainer");
   const el = document.createElement("div");
   el.className = `toast ${type}`;
-  const icons = {
-    success: "✓", error: "✗", info: "ℹ"
-  };
+  const icons = { success: "✓", error: "✗", info: "ℹ" };
   el.innerHTML = `<span>${icons[type] || "ℹ"}</span> ${message}`;
   c.appendChild(el);
   setTimeout(() => el.remove(), 4000);
 }
 
+// ── Terminal Boot Sequence ──────────────────────────────────────────
+
+const ASCII_LOGO = `
+  ███████╗ ██████╗ ██████╗ ███╗   ███╗
+  ██╔════╝██╔════╝ ██╔══██╗████╗ ████║
+  █████╗  ██║  ███╗██████╔╝██╔████╔██║
+  ██╔══╝  ██║   ██║██╔══██╗██║╚██╔╝██║
+  ██║     ╚██████╔╝██████╔╝██║ ╚═╝ ██║
+  ╚═╝      ╚═════╝ ╚═════╝ ╚═╝     ╚═╝
+  ┌─────────────────────────────────────┐
+  │  FortiGate Backup Manager v1.5.0   │
+  │  Secure Configuration Terminal     │
+  └─────────────────────────────────────┘`;
+
+const BOOT_MESSAGES = [
+  { text: "[<span class='ok'>OK</span>] Initializing kernel modules...", delay: 200 },
+  { text: "[<span class='ok'>OK</span>] Loading cryptographic subsystem...", delay: 350 },
+  { text: "[<span class='info'>INFO</span>] Detected FortiGate API engine v3.2.1", delay: 500 },
+  { text: "[<span class='ok'>OK</span>] SQLite database engine ready", delay: 650 },
+  { text: "[<span class='ok'>OK</span>] Initializing backup scheduler...", delay: 800 },
+  { text: "[<span class='warn'>WARN</span>] Firewall rules loaded: 317 endpoints", delay: 950 },
+  { text: "[<span class='ok'>OK</span>] Network interfaces configured", delay: 1100 },
+  { text: "[<span class='info'>INFO</span>] TLS 1.3 handshake protocol active", delay: 1250 },
+  { text: "[<span class='ok'>OK</span>] Secure terminal ready", delay: 1400 },
+  { text: "<span class='dim'>─────────────────────────────────────</span>", delay: 1550 },
+  { text: "<span class='info'>Authentication required. Enter credentials below.</span>", delay: 1700 },
+];
+
+function runBootSequence() {
+  const artEl = document.getElementById("asciiArt");
+  const bootEl = document.getElementById("bootLog");
+  const loginEl = document.getElementById("loginPrompt");
+
+  // Type out ASCII art
+  artEl.textContent = ASCII_LOGO;
+
+  // Boot messages with staggered delays
+  BOOT_MESSAGES.forEach((msg, i) => {
+    setTimeout(() => {
+      const line = document.createElement("div");
+      line.className = "boot-line";
+      line.innerHTML = msg.text;
+      bootEl.appendChild(line);
+
+      // Auto scroll
+      const body = document.getElementById("terminalBody");
+      body.scrollTop = body.scrollHeight;
+    }, msg.delay);
+  });
+
+  // Show login prompt after boot
+  setTimeout(() => {
+    loginEl.classList.remove("hidden");
+    const body = document.getElementById("terminalBody");
+    body.scrollTop = body.scrollHeight;
+    document.getElementById("authUser").focus();
+  }, BOOT_MESSAGES[BOOT_MESSAGES.length - 1].delay + 300);
+}
+
 // ── Auth ────────────────────────────────────────────────────────────
 
 function showAuth(show) {
-  document.getElementById("authOverlay").classList.toggle("hidden", !show);
+  const overlay = document.getElementById("authOverlay");
+  if (show) {
+    overlay.classList.remove("hidden");
+    runBootSequence();
+  } else {
+    overlay.classList.add("hidden");
+  }
 }
 
 document.getElementById("authForm").addEventListener("submit", async (e) => {
@@ -77,12 +142,11 @@ document.getElementById("authForm").addEventListener("submit", async (e) => {
   const user = document.getElementById("authUser").value.trim();
   const pass = document.getElementById("authPass").value;
   const errEl = document.getElementById("authError");
-  if (!user || !pass) { errEl.textContent = "Username and password required."; return; }
+  if (!user || !pass) { errEl.textContent = "ERROR: Username and password required."; return; }
 
   const btn = document.getElementById("authSubmit");
   btn.disabled = true;
-  btn.querySelector(".btn-text").textContent = "Signing in…";
-  btn.querySelector(".btn-loader").classList.remove("hidden");
+  btn.textContent = "[ AUTHENTICATING... ]";
 
   try {
     localStorage.setItem(AUTH_KEY, btoa(`${user}:${pass}`));
@@ -92,12 +156,11 @@ document.getElementById("authForm").addEventListener("submit", async (e) => {
     initApp();
     toast(`Welcome back, ${currentUser.username}`, "success");
   } catch {
-    errEl.textContent = "Invalid credentials. Please try again.";
+    errEl.textContent = "ACCESS DENIED: Invalid credentials.";
     localStorage.removeItem(AUTH_KEY);
   } finally {
     btn.disabled = false;
-    btn.querySelector(".btn-text").textContent = "Sign In";
-    btn.querySelector(".btn-loader").classList.add("hidden");
+    btn.textContent = "[ AUTHENTICATE ]";
   }
 });
 
@@ -136,6 +199,12 @@ function toggleAuthFields() {
   const mode = document.getElementById("centerAuthMode").value;
   document.querySelectorAll(".auth-cred-field").forEach(el => el.style.display = mode === "credentials" ? "" : "none");
   document.querySelectorAll(".auth-token-field").forEach(el => el.style.display = mode === "token" ? "" : "none");
+}
+
+function toggleEditAuthFields() {
+  const mode = document.getElementById("editAuthMode").value;
+  document.querySelectorAll(".edit-cred-field").forEach(el => el.style.display = mode === "credentials" ? "" : "none");
+  document.querySelectorAll(".edit-token-field").forEach(el => el.style.display = mode === "token" ? "" : "none");
 }
 
 // ── Dashboard ───────────────────────────────────────────────────────
@@ -192,7 +261,7 @@ async function loadDashboard() {
     if (centers.length === 0) {
       fleetEl.innerHTML = '<p class="empty-state">No centers registered</p>';
     } else {
-      fleetEl.innerHTML = centers.map((c, i) => {
+      fleetEl.innerHTML = centers.slice(0, 20).map((c, i) => {
         const cls = c.status === "OK" ? "ok" : c.status === "FAILED" ? "failed" : "unknown";
         return `<div class="fleet-item" style="animation-delay:${i * 0.04}s">
           <div><div class="fleet-name">${esc(c.name)}</div><div class="fleet-ip">${esc(c.fortigate_ip)} ${tagBadge(c.tag)}</div></div>
@@ -242,18 +311,19 @@ async function loadCenters() {
     tbody.innerHTML = centers.map((c, i) => {
       const cls = c.status === "OK" ? "ok" : c.status === "FAILED" ? "failed" : "unknown";
       const authIcon = c.auth_mode === "credentials" ? "🔑" : "🔐";
-      return `<tr style="animation: eventIn 0.3s ease ${i * 0.04}s backwards">
+      return `<tr style="animation: eventIn 0.3s ease ${i * 0.04}s backwards" data-center-id="${c.id}" oncontextmenu="showContextMenu(event, ${c.id})">
         <td><strong>${esc(c.name)}</strong></td>
         <td>${tagBadge(c.tag)}</td>
         <td>${esc(c.location || "--")}</td>
-        <td><code style="color:var(--accent)">${esc(c.fortigate_ip)}</code></td>
+        <td><span class="mono-ip">${esc(c.fortigate_ip)}</span></td>
         <td><span title="${c.auth_mode === 'credentials' ? 'Username/Password' : 'API Token'}">${authIcon}</span></td>
         <td>${esc(c.model || "--")}</td>
         <td><span class="status-badge ${cls}">${c.status}</span></td>
         <td>${fmtDate(c.last_backup)}</td>
         <td><div class="actions">
+          <button class="btn-sm action" onclick="openEditModal(${c.id})">✏️ Edit</button>
           <button class="btn-sm action" onclick="runBackup(${c.id})">▶ Backup</button>
-          <button class="btn-sm danger" onclick="deleteCenter(${c.id},'${esc(c.name)}')">✗ Delete</button>
+          <button class="btn-sm danger" onclick="deleteCenter(${c.id},'${esc(c.name)}')">✗</button>
         </div></td>
       </tr>`;
     }).join("");
@@ -414,6 +484,123 @@ async function runTagBackup() {
   finally {
     btn.disabled = false;
     btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run by Tag`;
+  }
+}
+
+// ── Context Menu (Right-click) ──────────────────────────────────────
+
+function showContextMenu(e, centerId) {
+  e.preventDefault();
+  contextCenterData = centersCache.find(c => c.id === centerId);
+  if (!contextCenterData) return;
+
+  const menu = document.getElementById("contextMenu");
+  menu.classList.remove("hidden");
+  menu.style.left = `${e.clientX}px`;
+  menu.style.top = `${e.clientY}px`;
+
+  // Ensure menu stays within viewport
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) menu.style.left = `${e.clientX - rect.width}px`;
+  if (rect.bottom > window.innerHeight) menu.style.top = `${e.clientY - rect.height}px`;
+}
+
+function hideContextMenu() {
+  document.getElementById("contextMenu").classList.add("hidden");
+  contextCenterData = null;
+}
+
+document.addEventListener("click", hideContextMenu);
+document.addEventListener("scroll", hideContextMenu, true);
+
+function contextEditCenter() {
+  if (contextCenterData) openEditModal(contextCenterData.id);
+  hideContextMenu();
+}
+
+function contextRunBackup() {
+  if (contextCenterData) runBackup(contextCenterData.id);
+  hideContextMenu();
+}
+
+function contextDeleteCenter() {
+  if (contextCenterData) deleteCenter(contextCenterData.id, contextCenterData.name);
+  hideContextMenu();
+}
+
+// ── Edit Center Modal ───────────────────────────────────────────────
+
+function openEditModal(centerId) {
+  const center = centersCache.find(c => c.id === centerId);
+  if (!center) return;
+
+  document.getElementById("editCenterId").value = center.id;
+  document.getElementById("editName").value = center.name || "";
+  document.getElementById("editIp").value = center.fortigate_ip || "";
+  document.getElementById("editTag").value = center.tag || "";
+  document.getElementById("editAuthMode").value = center.auth_mode || "credentials";
+  document.getElementById("editFgUser").value = center.fortigate_username || "";
+  document.getElementById("editFgPass").value = "";
+  document.getElementById("editToken").value = "";
+  document.getElementById("editLocation").value = center.location || "";
+  document.getElementById("editModel").value = center.model || "";
+  document.getElementById("editMessage").textContent = "";
+
+  toggleEditAuthFields();
+  document.getElementById("editModal").classList.remove("hidden");
+}
+
+function closeEditModal() {
+  document.getElementById("editModal").classList.add("hidden");
+}
+
+// Close modal on Escape
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeEditModal();
+});
+
+async function saveEditCenter() {
+  const id = document.getElementById("editCenterId").value;
+  const authMode = document.getElementById("editAuthMode").value;
+  const payload = {
+    name: document.getElementById("editName").value.trim(),
+    fortigate_ip: document.getElementById("editIp").value.trim(),
+    tag: document.getElementById("editTag").value || null,
+    auth_mode: authMode,
+    location: document.getElementById("editLocation").value.trim() || null,
+    model: document.getElementById("editModel").value.trim() || null,
+  };
+
+  if (authMode === "credentials") {
+    const user = document.getElementById("editFgUser").value.trim();
+    const pass = document.getElementById("editFgPass").value;
+    if (user) payload.fortigate_username = user;
+    if (pass) payload.fortigate_password = pass;
+  } else {
+    const token = document.getElementById("editToken").value.trim();
+    if (token) payload.api_token = token;
+  }
+
+  const msgEl = document.getElementById("editMessage");
+  if (!payload.name || !payload.fortigate_ip) {
+    msgEl.textContent = "Name and IP are required.";
+    msgEl.className = "form-message error";
+    return;
+  }
+
+  try {
+    await api(`/centers/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    closeEditModal();
+    toast(`Center "${payload.name}" updated successfully`, "success");
+    loadCenters();
+    loadDashboard();
+  } catch (err) {
+    msgEl.textContent = err.message;
+    msgEl.className = "form-message error";
   }
 }
 
