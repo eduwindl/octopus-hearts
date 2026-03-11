@@ -71,8 +71,9 @@ def init_environment(base_dir: Path) -> None:
 def start_api_server(port: int = 8787):
     """Start the FastAPI server in a daemon thread."""
     import uvicorn
+    from backend.api import app
     uvicorn.run(
-        "backend.api:app",
+        app,
         host="127.0.0.1",
         port=port,
         log_level="warning",
