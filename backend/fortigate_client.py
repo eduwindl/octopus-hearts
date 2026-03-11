@@ -30,15 +30,15 @@ def fetch_config_with_credentials(fortigate_ip: str, username: str, password: st
     base_url = f"https://{fortigate_ip}"
     session = requests.Session()
     session.verify = settings.fortigate_verify_ssl
-    session.headers.update({
+    # Step 1: Login via /logincheck
+    login_headers = {
         "Origin": base_url,
         "Referer": f"{base_url}/login",
-    })
-
-    # Step 1: Login via /logincheck
+    }
     login_response = session.post(
         f"{base_url}{LOGIN_ENDPOINT}",
         data={"username": username, "secretkey": password, "ajax": "1"},
+        headers=login_headers,
         timeout=settings.fortigate_timeout_seconds,
     )
 
@@ -76,6 +76,19 @@ def fetch_config_with_credentials(fortigate_ip: str, username: str, password: st
         headers=headers,
         timeout=settings.fortigate_timeout_seconds,
     )
+
+    # Automatic fallback for restricted admins (e.g. prof_admin) that only have VDOM access
+    if response.status_code in (403, 401):
+        fallback_params = {"scope": "vdom", "vdom": "root", "destination": "file"}
+        fallback_response = session.get(
+            f"{base_url}{BACKUP_ENDPOINT}",
+            params=fallback_params,
+            headers=headers,
+            timeout=settings.fortigate_timeout_seconds,
+        )
+        if fallback_response.ok:
+            response = fallback_response
+
     response.raise_for_status()
     content = response.content
 
@@ -112,15 +125,15 @@ def restore_config_with_credentials(fortigate_ip: str, username: str, password: 
     base_url = f"https://{fortigate_ip}"
     session = requests.Session()
     session.verify = settings.fortigate_verify_ssl
-    session.headers.update({
+    # Login
+    login_headers = {
         "Origin": base_url,
         "Referer": f"{base_url}/login",
-    })
-
-    # Login
+    }
     login_response = session.post(
         f"{base_url}{LOGIN_ENDPOINT}",
         data={"username": username, "secretkey": password, "ajax": "1"},
+        headers=login_headers,
         timeout=settings.fortigate_timeout_seconds,
     )
 
@@ -143,7 +156,10 @@ def restore_config_with_credentials(fortigate_ip: str, username: str, password: 
         else:
             raise ConnectionError(f"Login failed or intercepted for {fortigate_ip} with user '{username}'. Response snippet: {response_text[:100]}")
 
-    headers = {}
+    headers = {
+        "Origin": base_url,
+        "Referer": f"{base_url}/login",
+    }
     if csrf_token:
         headers["X-CSRFTOKEN"] = csrf_token
 
@@ -156,6 +172,20 @@ def restore_config_with_credentials(fortigate_ip: str, username: str, password: 
         files=files,
         timeout=settings.fortigate_timeout_seconds,
     )
+
+    if response.status_code in (403, 401):
+        fallback_params = {"scope": "vdom", "vdom": "root"}
+        files_fallback = {"file": ("config.conf", content)}
+        fallback_response = session.post(
+            f"{base_url}{settings.fortigate_restore_endpoint}",
+            headers=headers,
+            params=fallback_params,
+            files=files_fallback,
+            timeout=settings.fortigate_timeout_seconds,
+        )
+        if fallback_response.ok:
+            response = fallback_response
+
     response.raise_for_status()
 
     try:
