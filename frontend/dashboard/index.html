@@ -28,7 +28,7 @@
           </svg>
         </div>
         <h1>FortiGate Backup Manager</h1>
-        <p class="auth-version">v1.2.0 · Enterprise Configuration Backup</p>
+        <p class="auth-version">v1.3.0 · Enterprise Configuration Backup</p>
       </div>
       <form id="authForm" onsubmit="return false;">
         <div class="input-group">
@@ -107,6 +107,13 @@
             <p class="page-subtitle">Real-time overview of your FortiGate fleet</p>
           </div>
           <div class="header-actions">
+            <select id="tagFilterDash" class="select-styled" onchange="loadDashboard()" style="margin-right:8px">
+              <option value="">All Tags</option>
+              <option value="minerd">MINERD</option>
+              <option value="transi">TRANSI</option>
+              <option value="unphu">UNPHU</option>
+              <option value="lanco">LANCO</option>
+            </select>
             <button class="btn-primary" id="runAll" onclick="runAllBackups()">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
               Run All Backups
@@ -133,6 +140,9 @@
           </div>
         </div>
 
+        <!-- Tag Summary Cards -->
+        <div id="tagSummary" class="tag-summary-grid"></div>
+
         <div class="grid-2">
           <div class="glass-card fade-in" style="--delay:4">
             <h3 class="card-title">Recent Activity</h3>
@@ -152,18 +162,51 @@
             <h2 class="page-title">Centers</h2>
             <p class="page-subtitle">Manage your FortiGate firewalls</p>
           </div>
-          <button class="btn-primary" onclick="toggleAddForm()">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Add FortiGate
-          </button>
+          <div class="header-actions">
+            <select id="tagFilterCenters" class="select-styled" onchange="loadCenters()" style="margin-right:8px">
+              <option value="">All Tags</option>
+              <option value="minerd">MINERD</option>
+              <option value="transi">TRANSI</option>
+              <option value="unphu">UNPHU</option>
+              <option value="lanco">LANCO</option>
+            </select>
+            <button class="btn-secondary" onclick="toggleBulkForm()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Bulk Import
+            </button>
+            <button class="btn-primary" onclick="toggleAddForm()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Add FortiGate
+            </button>
+          </div>
         </div>
 
+        <!-- ADD CENTER FORM -->
         <div id="addCenterForm" class="glass-card form-card collapsed">
           <h3 class="card-title">New FortiGate Center</h3>
           <div class="form-grid-3">
             <div class="input-group"><label>Name *</label><input id="centerName" placeholder="e.g. Main Office" /></div>
             <div class="input-group"><label>FortiGate IP *</label><input id="centerIp" placeholder="e.g. 10.1.1.1" /></div>
-            <div class="input-group"><label>API Token *</label><input id="centerToken" type="password" placeholder="Enter API token" /></div>
+            <div class="input-group">
+              <label>Tag</label>
+              <select id="centerTag" class="select-styled">
+                <option value="">No Tag</option>
+                <option value="minerd">MINERD</option>
+                <option value="transi">TRANSI</option>
+                <option value="unphu">UNPHU</option>
+                <option value="lanco">LANCO</option>
+              </select>
+            </div>
+            <div class="input-group">
+              <label>Auth Mode</label>
+              <select id="centerAuthMode" class="select-styled" onchange="toggleAuthFields()">
+                <option value="credentials">Username / Password</option>
+                <option value="token">API Token</option>
+              </select>
+            </div>
+            <div class="input-group auth-cred-field"><label>FortiGate Username *</label><input id="centerFgUser" placeholder="e.g. admin" /></div>
+            <div class="input-group auth-cred-field"><label>FortiGate Password *</label><input id="centerFgPass" type="password" placeholder="FortiGate password" /></div>
+            <div class="input-group auth-token-field" style="display:none"><label>API Token *</label><input id="centerToken" type="password" placeholder="Enter API token" /></div>
             <div class="input-group"><label>Location</label><input id="centerLocation" placeholder="e.g. Santo Domingo" /></div>
             <div class="input-group"><label>Model</label><input id="centerModel" placeholder="e.g. FortiGate 100F" /></div>
             <div class="input-group form-actions">
@@ -177,10 +220,26 @@
           <div id="centerMessage" class="form-message"></div>
         </div>
 
+        <!-- BULK IMPORT FORM -->
+        <div id="bulkImportForm" class="glass-card form-card collapsed">
+          <h3 class="card-title">Bulk Import Centers (JSON)</h3>
+          <p style="color:var(--text-muted); margin-bottom:12px; font-size:0.85rem">
+            Paste a JSON array of centers. Each entry needs: <code>name</code>, <code>fortigate_ip</code>. Optional: <code>tag</code>, <code>location</code>, <code>model</code>, <code>fortigate_username</code>, <code>fortigate_password</code>.
+          </p>
+          <div class="input-group">
+            <textarea id="bulkJson" rows="8" placeholder='[{"name":"Centro 1","fortigate_ip":"10.0.0.1","tag":"minerd","fortigate_username":"admin","fortigate_password":"pass123"}]' style="width:100%;font-family:monospace;font-size:0.85rem;background:var(--bg-secondary);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:12px;resize:vertical"></textarea>
+          </div>
+          <div class="btn-group" style="margin-top:12px">
+            <button class="btn-primary" onclick="bulkImport()">Import All</button>
+            <button class="btn-ghost" onclick="toggleBulkForm()">Cancel</button>
+          </div>
+          <div id="bulkMessage" class="form-message"></div>
+        </div>
+
         <div class="glass-card">
           <div class="table-wrapper">
             <table>
-              <thead><tr><th>Name</th><th>Location</th><th>IP Address</th><th>Model</th><th>Status</th><th>Last Backup</th><th>Actions</th></tr></thead>
+              <thead><tr><th>Name</th><th>Tag</th><th>Location</th><th>IP Address</th><th>Auth</th><th>Model</th><th>Status</th><th>Last Backup</th><th>Actions</th></tr></thead>
               <tbody id="centersBody"></tbody>
             </table>
             <p id="centersEmpty" class="empty-state hidden">No centers registered yet. Click "Add FortiGate" to get started.</p>
@@ -196,9 +255,20 @@
             <p class="page-subtitle">View and restore configuration backups</p>
           </div>
           <div class="header-actions">
+            <select id="backupTagSelect" class="select-styled" onchange="filterBackupCenters()" style="margin-right:8px">
+              <option value="">All Tags</option>
+              <option value="minerd">MINERD</option>
+              <option value="transi">TRANSI</option>
+              <option value="unphu">UNPHU</option>
+              <option value="lanco">LANCO</option>
+            </select>
             <select id="backupCenterSelect" class="select-styled" onchange="loadBackups()">
               <option value="">Select a center…</option>
             </select>
+            <button class="btn-primary" id="runTagBackup" onclick="runTagBackup()" style="margin-left:8px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Run by Tag
+            </button>
           </div>
         </div>
         <div class="glass-card">

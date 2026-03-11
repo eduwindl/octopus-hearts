@@ -4,6 +4,9 @@ from sqlalchemy.sql import func
 from database.db import Base
 
 
+VALID_TAGS = ("minerd", "transi", "unphu", "lanco")
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -22,8 +25,12 @@ class Center(Base):
     name: Mapped[str] = mapped_column(String(200), unique=True, index=True)
     location: Mapped[str | None] = mapped_column(String(200))
     fortigate_ip: Mapped[str] = mapped_column(String(64), unique=True, index=True)
-    api_token_encrypted: Mapped[str] = mapped_column(Text)
+    api_token_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    fortigate_username: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    fortigate_password_encrypted: Mapped[str | None] = mapped_column(Text, nullable=True)
+    auth_mode: Mapped[str] = mapped_column(String(20), default="token")  # "token" or "credentials"
     model: Mapped[str | None] = mapped_column(String(100))
+    tag: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
     last_backup: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True))
     status: Mapped[str] = mapped_column(String(50), default="UNKNOWN")
 

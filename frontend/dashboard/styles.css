@@ -375,7 +375,7 @@ body {
 .form-card {
   overflow: hidden; transition: max-height 0.4s cubic-bezier(0.16, 1, 0.3, 1),
     opacity 0.3s ease, padding 0.3s ease, margin 0.3s ease, border 0.3s ease;
-  max-height: 400px;
+  max-height: 600px;
 }
 .form-card.collapsed {
   max-height: 0; padding: 0 22px; margin-bottom: 0;
@@ -500,6 +500,64 @@ td .actions { display: flex; gap: 6px; }
 }
 
 .hidden { display: none !important; }
+
+/* ═══ TAG BADGES ═══ */
+.tag-badge {
+  display: inline-flex; align-items: center;
+  padding: 2px 10px; border-radius: 12px;
+  font-size: 0.7rem; font-weight: 700;
+  letter-spacing: 0.5px;
+  background: color-mix(in srgb, var(--tag-color, #64748b) 15%, transparent);
+  color: var(--tag-color, #64748b);
+  border: 1px solid color-mix(in srgb, var(--tag-color, #64748b) 25%, transparent);
+}
+.tag-badge.none { opacity: 0.4; font-weight: 400; }
+
+/* ═══ TAG SUMMARY CARDS ═══ */
+.tag-summary-grid {
+  display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap;
+}
+.tag-summary-card {
+  flex: 1; min-width: 120px;
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--tag-color) 20%, transparent);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  text-align: center;
+  transition: var(--transition);
+  animation: metricIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+.tag-summary-card:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--tag-color) 40%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--tag-color) 10%, transparent);
+}
+.tag-summary-name {
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 1px;
+  color: var(--tag-color);
+  margin-bottom: 4px;
+}
+.tag-summary-count {
+  font-size: 1.8rem; font-weight: 800; letter-spacing: -1px;
+  color: var(--text);
+}
+.tag-summary-label {
+  font-size: 0.75rem; color: var(--text-muted);
+}
+
+/* ═══ BTN SECONDARY ═══ */
+.btn-secondary {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 22px; border: 1px solid var(--border); border-radius: var(--radius-xs);
+  background: var(--bg-card); color: var(--text-soft);
+  font-family: var(--font); font-weight: 600; font-size: 0.9rem;
+  cursor: pointer; transition: var(--transition);
+}
+.btn-secondary:hover {
+  background: var(--bg-hover); border-color: var(--text-muted);
+  transform: translateY(-1px);
+}
 
 /* ═══ RESPONSIVE ═══ */
 @media (max-width: 900px) {

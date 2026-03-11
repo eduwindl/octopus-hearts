@@ -7,10 +7,14 @@ class CenterBase(BaseModel):
     location: str | None = None
     fortigate_ip: str
     model: str | None = None
+    tag: str | None = None
 
 
 class CenterCreate(CenterBase):
-    api_token: str = Field(..., min_length=10)
+    auth_mode: str = "token"  # "token" or "credentials"
+    api_token: str | None = None
+    fortigate_username: str | None = None
+    fortigate_password: str | None = None
 
 
 class CenterUpdate(BaseModel):
@@ -18,11 +22,16 @@ class CenterUpdate(BaseModel):
     location: str | None = None
     fortigate_ip: str | None = None
     model: str | None = None
+    tag: str | None = None
+    auth_mode: str | None = None
     api_token: str | None = None
+    fortigate_username: str | None = None
+    fortigate_password: str | None = None
 
 
 class CenterOut(CenterBase):
     id: int
+    auth_mode: str = "token"
     last_backup: datetime | None = None
     status: str
 
@@ -80,3 +89,19 @@ class DiffResponse(BaseModel):
     from_backup_id: int
     to_backup_id: int
     diff: str
+
+
+class BulkCenterItem(BaseModel):
+    name: str
+    fortigate_ip: str
+    location: str | None = None
+    model: str | None = None
+    tag: str | None = None
+    auth_mode: str = "credentials"
+    fortigate_username: str | None = None
+    fortigate_password: str | None = None
+    api_token: str | None = None
+
+
+class BulkImportRequest(BaseModel):
+    centers: list[BulkCenterItem]

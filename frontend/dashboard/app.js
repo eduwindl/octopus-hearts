@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════
-   FortiGate Backup Manager – Frontend Logic
+   FortiGate Backup Manager – Frontend Logic v1.3.0
    ═══════════════════════════════════════════════════════════════════ */
 
 const API = window.API_BASE || `http://localhost:${location.port || 8000}`;
@@ -37,6 +37,19 @@ function fmtSize(bytes) {
   if (bytes < 1024) return bytes + " B";
   if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
   return (bytes / 1048576).toFixed(1) + " MB";
+}
+
+const TAG_COLORS = {
+  minerd: "#f59e0b",
+  transi: "#10b981",
+  unphu: "#6366f1",
+  lanco: "#ec4899",
+};
+
+function tagBadge(tag) {
+  if (!tag) return '<span class="tag-badge none">—</span>';
+  const color = TAG_COLORS[tag] || "#64748b";
+  return `<span class="tag-badge" style="--tag-color:${color}">${tag.toUpperCase()}</span>`;
 }
 
 // ── Toast notifications ─────────────────────────────────────────────
@@ -117,11 +130,21 @@ function switchTab(name) {
   if (name === "users") loadUsers();
 }
 
+// ── Auth mode toggle ────────────────────────────────────────────────
+
+function toggleAuthFields() {
+  const mode = document.getElementById("centerAuthMode").value;
+  document.querySelectorAll(".auth-cred-field").forEach(el => el.style.display = mode === "credentials" ? "" : "none");
+  document.querySelectorAll(".auth-token-field").forEach(el => el.style.display = mode === "token" ? "" : "none");
+}
+
 // ── Dashboard ───────────────────────────────────────────────────────
 
 async function loadDashboard() {
   try {
-    const [centers, events] = await Promise.all([api("/centers"), api("/events")]);
+    const tagFilter = document.getElementById("tagFilterDash")?.value || "";
+    const centersUrl = tagFilter ? `/centers?tag=${tagFilter}` : "/centers";
+    const [centers, events, tags] = await Promise.all([api(centersUrl), api("/events"), api("/tags")]);
     centersCache = centers;
 
     animateCounter("totalCenters", centers.length);
@@ -130,6 +153,21 @@ async function loadDashboard() {
 
     const dates = centers.map(c => c.last_backup).filter(Boolean).sort();
     document.getElementById("lastBackup").textContent = dates.length ? fmtDate(dates[dates.length - 1]) : "--";
+
+    // Tag summary cards
+    const tagEl = document.getElementById("tagSummary");
+    if (tags.length > 0) {
+      tagEl.innerHTML = tags.map(t => {
+        const color = TAG_COLORS[t.tag] || "#64748b";
+        return `<div class="tag-summary-card" style="--tag-color:${color}">
+          <div class="tag-summary-name">${t.tag.toUpperCase()}</div>
+          <div class="tag-summary-count">${t.count}</div>
+          <div class="tag-summary-label">centers</div>
+        </div>`;
+      }).join("");
+    } else {
+      tagEl.innerHTML = "";
+    }
 
     // Recent events
     const evtEl = document.getElementById("recentEvents");
@@ -157,7 +195,7 @@ async function loadDashboard() {
       fleetEl.innerHTML = centers.map((c, i) => {
         const cls = c.status === "OK" ? "ok" : c.status === "FAILED" ? "failed" : "unknown";
         return `<div class="fleet-item" style="animation-delay:${i * 0.04}s">
-          <div><div class="fleet-name">${esc(c.name)}</div><div class="fleet-ip">${esc(c.fortigate_ip)}</div></div>
+          <div><div class="fleet-name">${esc(c.name)}</div><div class="fleet-ip">${esc(c.fortigate_ip)} ${tagBadge(c.tag)}</div></div>
           <span class="status-badge ${cls}">${c.status}</span>
         </div>`;
       }).join("");
@@ -187,7 +225,9 @@ function animateCounter(id, target) {
 
 async function loadCenters() {
   try {
-    const centers = await api("/centers");
+    const tagFilter = document.getElementById("tagFilterCenters")?.value || "";
+    const url = tagFilter ? `/centers?tag=${tagFilter}` : "/centers";
+    const centers = await api(url);
     centersCache = centers;
     const tbody = document.getElementById("centersBody");
     const empty = document.getElementById("centersEmpty");
@@ -201,10 +241,13 @@ async function loadCenters() {
 
     tbody.innerHTML = centers.map((c, i) => {
       const cls = c.status === "OK" ? "ok" : c.status === "FAILED" ? "failed" : "unknown";
+      const authIcon = c.auth_mode === "credentials" ? "🔑" : "🔐";
       return `<tr style="animation: eventIn 0.3s ease ${i * 0.04}s backwards">
         <td><strong>${esc(c.name)}</strong></td>
+        <td>${tagBadge(c.tag)}</td>
         <td>${esc(c.location || "--")}</td>
         <td><code style="color:var(--accent)">${esc(c.fortigate_ip)}</code></td>
+        <td><span title="${c.auth_mode === 'credentials' ? 'Username/Password' : 'API Token'}">${authIcon}</span></td>
         <td>${esc(c.model || "--")}</td>
         <td><span class="status-badge ${cls}">${c.status}</span></td>
         <td>${fmtDate(c.last_backup)}</td>
@@ -223,20 +266,45 @@ function toggleAddForm() {
   document.getElementById("addCenterForm").classList.toggle("collapsed");
 }
 
+function toggleBulkForm() {
+  document.getElementById("bulkImportForm").classList.toggle("collapsed");
+}
+
 async function addCenter() {
+  const authMode = document.getElementById("centerAuthMode").value;
   const payload = {
     name: document.getElementById("centerName").value.trim(),
     location: document.getElementById("centerLocation").value.trim() || null,
     fortigate_ip: document.getElementById("centerIp").value.trim(),
     model: document.getElementById("centerModel").value.trim() || null,
-    api_token: document.getElementById("centerToken").value.trim(),
+    tag: document.getElementById("centerTag").value || null,
+    auth_mode: authMode,
   };
+
+  if (authMode === "credentials") {
+    payload.fortigate_username = document.getElementById("centerFgUser").value.trim();
+    payload.fortigate_password = document.getElementById("centerFgPass").value;
+  } else {
+    payload.api_token = document.getElementById("centerToken").value.trim();
+  }
+
   const msgEl = document.getElementById("centerMessage");
-  if (!payload.name || !payload.fortigate_ip || !payload.api_token) {
-    msgEl.textContent = "Name, IP and API Token are required.";
+  if (!payload.name || !payload.fortigate_ip) {
+    msgEl.textContent = "Name and IP are required.";
     msgEl.className = "form-message error";
     return;
   }
+  if (authMode === "credentials" && (!payload.fortigate_username || !payload.fortigate_password)) {
+    msgEl.textContent = "FortiGate username and password are required.";
+    msgEl.className = "form-message error";
+    return;
+  }
+  if (authMode === "token" && !payload.api_token) {
+    msgEl.textContent = "API Token is required.";
+    msgEl.className = "form-message error";
+    return;
+  }
+
   try {
     await api("/centers", {
       method: "POST",
@@ -244,10 +312,45 @@ async function addCenter() {
       body: JSON.stringify(payload),
     });
     msgEl.textContent = "";
-    ["centerName","centerLocation","centerIp","centerModel","centerToken"].forEach(
-      id => document.getElementById(id).value = "");
+    ["centerName","centerLocation","centerIp","centerModel","centerToken","centerFgUser","centerFgPass"].forEach(
+      id => { const el = document.getElementById(id); if (el) el.value = ""; });
+    document.getElementById("centerTag").value = "";
     toggleAddForm();
     toast(`Center "${payload.name}" added successfully`, "success");
+    loadCenters();
+    loadDashboard();
+  } catch (err) {
+    msgEl.textContent = err.message;
+    msgEl.className = "form-message error";
+  }
+}
+
+async function bulkImport() {
+  const msgEl = document.getElementById("bulkMessage");
+  const raw = document.getElementById("bulkJson").value.trim();
+  if (!raw) {
+    msgEl.textContent = "Paste a JSON array of centers.";
+    msgEl.className = "form-message error";
+    return;
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) throw new Error("Must be an array");
+  } catch (e) {
+    msgEl.textContent = "Invalid JSON: " + e.message;
+    msgEl.className = "form-message error";
+    return;
+  }
+  try {
+    const result = await api("/centers/bulk", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ centers: parsed }),
+    });
+    msgEl.textContent = `Created: ${result.created}, Skipped: ${result.skipped}, Errors: ${result.errors.length}`;
+    msgEl.className = "form-message success";
+    toast(`Bulk import: ${result.created} created, ${result.skipped} skipped`, "success");
     loadCenters();
     loadDashboard();
   } catch (err) {
@@ -293,7 +396,36 @@ async function runAllBackups() {
   }
 }
 
+async function runTagBackup() {
+  const tag = document.getElementById("backupTagSelect").value;
+  if (!tag) {
+    toast("Select a tag first to run backups by tag", "error");
+    return;
+  }
+  const btn = document.getElementById("runTagBackup");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="btn-loader"></span> Running…';
+  toast(`Running backups for all ${tag.toUpperCase()} centers…`, "info");
+  try {
+    const result = await api(`/backups/run-by-tag/${tag}`, { method: "POST" });
+    toast(`${tag.toUpperCase()}: ${result.ok} OK, ${result.failed} failed out of ${result.total}`, "success");
+    loadDashboard();
+  } catch (err) { toast(`Tag backup failed: ${err.message}`, "error"); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run by Tag`;
+  }
+}
+
 // ── Backups ─────────────────────────────────────────────────────────
+
+function filterBackupCenters() {
+  const tag = document.getElementById("backupTagSelect").value;
+  const filtered = tag ? centersCache.filter(c => c.tag === tag) : centersCache;
+  const sel = document.getElementById("backupCenterSelect");
+  sel.innerHTML = '<option value="">Select a center…</option>'
+    + filtered.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+}
 
 function updateBackupSelect() {
   const sel = document.getElementById("backupCenterSelect");
@@ -338,7 +470,7 @@ async function restoreBackup(id) {
   if (!confirm("Restore this configuration to the FortiGate?\nThis will overwrite the current config.")) return;
   toast("Restoring configuration…", "info");
   try {
-    await api(`/backups/${id}/restore`, { method: "POST" });
+    await api(`/restore/${id}`, { method: "POST" });
     toast("Restore completed!", "success");
   } catch (err) { toast(`Restore failed: ${err.message}`, "error"); }
 }

@@ -8,8 +8,8 @@ from database.db import SessionLocal, get_engine, Base
 from database import models
 from backend import schemas
 from backend.security import encrypt_token, decrypt_token
-from backend.backup_engine import run_backup_for_all, run_backup_for_center
-from backend.fortigate_client import restore_config
+from backend.backup_engine import run_backup_for_all, run_backup_for_center, run_backup_by_tag
+from backend.fortigate_client import restore_config, restore_config_with_credentials
 from backend.config import settings
 from backend.auth import ensure_admin_user, authenticate_user, hash_password
 from storage.file_manager import ensure_center_dir
@@ -95,6 +95,10 @@ def health():
     return {"status": "ok"}
 
 
+# ═══════════════════════════════════════════
+# Users
+# ═══════════════════════════════════════════
+
 @app.post("/users", response_model=schemas.UserOut, dependencies=[Depends(require_admin)])
 def create_user(payload: schemas.UserCreate, db: Session = Depends(get_db)):
     existing = db.query(models.User).filter(models.User.username == payload.username).first()
@@ -153,6 +157,10 @@ def me(user: models.User = Depends(require_auth)):
     return user
 
 
+# ═══════════════════════════════════════════
+# Centers
+# ═══════════════════════════════════════════
+
 @app.post("/centers", response_model=schemas.CenterOut, dependencies=[Depends(require_auth)])
 def create_center(payload: schemas.CenterCreate, db: Session = Depends(get_db)):
     existing = db.query(models.Center).filter(models.Center.name == payload.name).first()
@@ -163,10 +171,18 @@ def create_center(payload: schemas.CenterCreate, db: Session = Depends(get_db)):
         name=payload.name,
         location=payload.location,
         fortigate_ip=payload.fortigate_ip,
-        api_token_encrypted=encrypt_token(payload.api_token),
         model=payload.model,
+        tag=payload.tag,
+        auth_mode=payload.auth_mode,
         status="UNKNOWN",
     )
+
+    if payload.auth_mode == "token" and payload.api_token:
+        center.api_token_encrypted = encrypt_token(payload.api_token)
+    elif payload.auth_mode == "credentials" and payload.fortigate_username and payload.fortigate_password:
+        center.fortigate_username = payload.fortigate_username
+        center.fortigate_password_encrypted = encrypt_token(payload.fortigate_password)
+
     db.add(center)
     db.commit()
     db.refresh(center)
@@ -175,8 +191,11 @@ def create_center(payload: schemas.CenterCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/centers", response_model=list[schemas.CenterOut], dependencies=[Depends(require_auth)])
-def list_centers(db: Session = Depends(get_db)):
-    return db.query(models.Center).all()
+def list_centers(tag: str | None = None, db: Session = Depends(get_db)):
+    query = db.query(models.Center)
+    if tag:
+        query = query.filter(models.Center.tag == tag)
+    return query.all()
 
 
 @app.get("/centers/{center_id}", response_model=schemas.CenterOut, dependencies=[Depends(require_auth)])
@@ -201,8 +220,16 @@ def update_center(center_id: int, payload: schemas.CenterUpdate, db: Session = D
         center.fortigate_ip = payload.fortigate_ip
     if payload.model is not None:
         center.model = payload.model
+    if payload.tag is not None:
+        center.tag = payload.tag
+    if payload.auth_mode is not None:
+        center.auth_mode = payload.auth_mode
     if payload.api_token is not None:
         center.api_token_encrypted = encrypt_token(payload.api_token)
+    if payload.fortigate_username is not None:
+        center.fortigate_username = payload.fortigate_username
+    if payload.fortigate_password is not None:
+        center.fortigate_password_encrypted = encrypt_token(payload.fortigate_password)
 
     db.add(center)
     db.commit()
@@ -220,6 +247,65 @@ def delete_center(center_id: int, db: Session = Depends(get_db)):
     return {"deleted": True}
 
 
+# ═══════════════════════════════════════════
+# Bulk Import
+# ═══════════════════════════════════════════
+
+@app.post("/centers/bulk", dependencies=[Depends(require_auth)])
+def bulk_import_centers(payload: schemas.BulkImportRequest, db: Session = Depends(get_db)):
+    created = 0
+    skipped = 0
+    errors = []
+    for item in payload.centers:
+        existing = db.query(models.Center).filter(
+            (models.Center.name == item.name) | (models.Center.fortigate_ip == item.fortigate_ip)
+        ).first()
+        if existing:
+            skipped += 1
+            continue
+        try:
+            center = models.Center(
+                name=item.name,
+                location=item.location,
+                fortigate_ip=item.fortigate_ip,
+                model=item.model,
+                tag=item.tag,
+                auth_mode=item.auth_mode,
+                status="UNKNOWN",
+            )
+            if item.auth_mode == "token" and item.api_token:
+                center.api_token_encrypted = encrypt_token(item.api_token)
+            elif item.auth_mode == "credentials" and item.fortigate_username and item.fortigate_password:
+                center.fortigate_username = item.fortigate_username
+                center.fortigate_password_encrypted = encrypt_token(item.fortigate_password)
+
+            db.add(center)
+            db.commit()
+            ensure_center_dir(center.name)
+            created += 1
+        except Exception as exc:
+            db.rollback()
+            errors.append({"name": item.name, "error": str(exc)})
+
+    return {"created": created, "skipped": skipped, "errors": errors}
+
+
+# ═══════════════════════════════════════════
+# Tags
+# ═══════════════════════════════════════════
+
+@app.get("/tags", dependencies=[Depends(require_auth)])
+def list_tags(db: Session = Depends(get_db)):
+    """Return available tags and count of centers per tag."""
+    from sqlalchemy import func
+    results = db.query(models.Center.tag, func.count(models.Center.id)).group_by(models.Center.tag).all()
+    return [{"tag": tag or "untagged", "count": count} for tag, count in results]
+
+
+# ═══════════════════════════════════════════
+# Backups
+# ═══════════════════════════════════════════
+
 @app.post("/backups/run", dependencies=[Depends(require_auth)])
 def run_backups(db: Session = Depends(get_db)):
     result = run_backup_for_all(db)
@@ -235,6 +321,12 @@ def run_backup_one(center_id: int, db: Session = Depends(get_db)):
     if not backup:
         raise HTTPException(status_code=500, detail="Backup failed")
     return {"backup_id": backup.id}
+
+
+@app.post("/backups/run-by-tag/{tag}", dependencies=[Depends(require_auth)])
+def run_backups_by_tag(tag: str, db: Session = Depends(get_db)):
+    result = run_backup_by_tag(db, tag)
+    return result
 
 
 @app.get("/backups", response_model=list[schemas.BackupOut], dependencies=[Depends(require_auth)])
@@ -267,10 +359,14 @@ def restore_backup(backup_id: int, db: Session = Depends(get_db)):
     if not path.exists():
         raise HTTPException(status_code=404, detail="Backup file missing")
 
-    token = decrypt_token(center.api_token_encrypted)
     content = path.read_bytes()
     try:
-        restore_config(center.fortigate_ip, token, content)
+        if center.auth_mode == "credentials" and center.fortigate_username and center.fortigate_password_encrypted:
+            password = decrypt_token(center.fortigate_password_encrypted)
+            restore_config_with_credentials(center.fortigate_ip, center.fortigate_username, password, content)
+        else:
+            token = decrypt_token(center.api_token_encrypted)
+            restore_config(center.fortigate_ip, token, content)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Restore failed: {exc}") from exc
 
