@@ -4,119 +4,281 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>FortiGate Backup Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="top">
-    <div>
-      <h1>FortiGate Backup Manager</h1>
-      <p>Centralized visibility for daily configuration backups.</p>
+  <!-- ═══ AUTH OVERLAY ═══ -->
+  <div id="authOverlay" class="auth-overlay">
+    <div class="auth-bg-animation">
+      <div class="auth-orb orb-1"></div>
+      <div class="auth-orb orb-2"></div>
+      <div class="auth-orb orb-3"></div>
     </div>
-    <button id="runAll" class="primary">Run Backups</button>
-  </header>
-
-  <div id="authOverlay" class="auth-overlay hidden">
-    <div class="auth-card">
-      <h2>Sign in</h2>
-      <p>Enter API credentials to access the dashboard.</p>
-      <label>
-        Username
-        <input id="authUser" type="text" autocomplete="username" />
-      </label>
-      <label>
-        Password
-        <input id="authPass" type="password" autocomplete="current-password" />
-      </label>
-      <button id="authSubmit" class="primary">Login</button>
-      <div id="authError" class="auth-error"></div>
+    <div class="auth-card slide-up">
+      <div class="auth-logo">
+        <div class="shield-icon">
+          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+            <path d="M24 4L6 12V22C6 33.1 13.7 43.3 24 46C34.3 43.3 42 33.1 42 22V12L24 4Z" fill="url(#shield-grad)" opacity="0.15"/>
+            <path d="M24 4L6 12V22C6 33.1 13.7 43.3 24 46C34.3 43.3 42 33.1 42 22V12L24 4Z" stroke="url(#shield-grad)" stroke-width="2" fill="none"/>
+            <path d="M18 24L22 28L30 20" stroke="url(#shield-grad)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <defs><linearGradient id="shield-grad" x1="6" y1="4" x2="42" y2="46"><stop stop-color="#60a5fa"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs>
+          </svg>
+        </div>
+        <h1>FortiGate Backup Manager</h1>
+        <p class="auth-version">v1.2.0 · Enterprise Configuration Backup</p>
+      </div>
+      <form id="authForm" onsubmit="return false;">
+        <div class="input-group">
+          <label for="authUser">Username</label>
+          <input id="authUser" type="text" autocomplete="username" placeholder="Enter your username" />
+        </div>
+        <div class="input-group">
+          <label for="authPass">Password</label>
+          <input id="authPass" type="password" autocomplete="current-password" placeholder="Enter your password" />
+        </div>
+        <button id="authSubmit" class="btn-primary btn-full" type="submit">
+          <span class="btn-text">Sign In</span>
+          <span class="btn-loader hidden"></span>
+        </button>
+        <div id="authError" class="auth-error"></div>
+      </form>
     </div>
   </div>
 
-  <section class="cards">
-    <div class="card">
-      <h2>Total Centers</h2>
-      <div id="totalCenters" class="metric">0</div>
-    </div>
-    <div class="card">
-      <h2>Last Backup</h2>
-      <div id="lastBackup" class="metric">--</div>
-    </div>
-    <div class="card">
-      <h2>Failed</h2>
-      <div id="failedCenters" class="metric">0</div>
-    </div>
-  </section>
-
-  <section class="panel">
-    <h2>Centers</h2>
-    <div class="form-grid">
-      <div>
-        <h3>Add FortiGate</h3>
-        <div class="form-row">
-          <input id="centerName" placeholder="Center name" />
-          <input id="centerLocation" placeholder="Location (optional)" />
+  <!-- ═══ MAIN APP ═══ -->
+  <div id="mainApp" class="main-app hidden">
+    <!-- SIDEBAR -->
+    <nav class="sidebar" id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-icon">
+          <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
+            <path d="M24 4L6 12V22C6 33.1 13.7 43.3 24 46C34.3 43.3 42 33.1 42 22V12L24 4Z" fill="url(#sb-grad)" opacity="0.2"/>
+            <path d="M24 4L6 12V22C6 33.1 13.7 43.3 24 46C34.3 43.3 42 33.1 42 22V12L24 4Z" stroke="url(#sb-grad)" stroke-width="2" fill="none"/>
+            <defs><linearGradient id="sb-grad" x1="6" y1="4" x2="42" y2="46"><stop stop-color="#60a5fa"/><stop offset="1" stop-color="#a78bfa"/></linearGradient></defs>
+          </svg>
         </div>
-        <div class="form-row">
-          <input id="centerIp" placeholder="FortiGate IP" />
-          <input id="centerModel" placeholder="Model (optional)" />
-        </div>
-        <div class="form-row">
-          <input id="centerToken" placeholder="API token" />
-          <button id="addCenter" class="primary">Add Center</button>
-        </div>
-        <div id="centerMessage" class="form-message"></div>
+        <span class="brand-text">FGBM</span>
       </div>
-    </div>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>IP</th>
-          <th>Model</th>
-          <th>Status</th>
-          <th>Last Backup</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="centersBody"></tbody>
-    </table>
-  </section>
 
-  <section class="panel">
-    <h2>Recent Events</h2>
-    <div id="events"></div>
-  </section>
+      <div class="nav-links">
+        <button class="nav-item active" data-tab="dashboard" onclick="switchTab('dashboard')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+          <span>Dashboard</span>
+        </button>
+        <button class="nav-item" data-tab="centers" onclick="switchTab('centers')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          <span>Centers</span>
+        </button>
+        <button class="nav-item" data-tab="backups" onclick="switchTab('backups')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Backups</span>
+        </button>
+        <button class="nav-item" data-tab="events" onclick="switchTab('events')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <span>Events</span>
+        </button>
+        <button class="nav-item" data-tab="users" onclick="switchTab('users')" id="navUsers" style="display:none">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          <span>Users</span>
+        </button>
+      </div>
 
-  <section id="adminPanel" class="panel hidden">
-    <h2>User Management (Admin)</h2>
-    <div class="form-row">
-      <input id="myNewPassword" type="password" placeholder="New admin password" />
-      <button id="updateMyPassword" class="primary">Update My Password</button>
-    </div>
-    <div id="myPasswordMessage" class="form-message"></div>
-    <div class="form-row">
-      <input id="userName" placeholder="Username" />
-      <input id="userPassword" type="password" placeholder="Password" />
-      <select id="userRole">
-        <option value="operator">Operator</option>
-        <option value="viewer">Viewer</option>
-        <option value="admin">Admin</option>
-      </select>
-      <button id="createUser" class="primary">Create User</button>
-    </div>
-    <div id="userMessage" class="form-message"></div>
-    <table>
-      <thead>
-        <tr>
-          <th>Username</th>
-          <th>Role</th>
-          <th>Status</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody id="usersBody"></tbody>
-    </table>
-  </section>
+      <div class="sidebar-footer">
+        <div class="user-badge" id="userBadge">
+          <div class="avatar">A</div>
+          <div class="user-info">
+            <span class="user-name" id="currentUserName">admin</span>
+            <span class="user-role" id="currentUserRole">admin</span>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- CONTENT -->
+    <main class="content">
+      <!-- DASHBOARD TAB -->
+      <section id="tab-dashboard" class="tab-panel active">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Dashboard</h2>
+            <p class="page-subtitle">Real-time overview of your FortiGate fleet</p>
+          </div>
+          <div class="header-actions">
+            <button class="btn-primary" id="runAll" onclick="runAllBackups()">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Run All Backups
+            </button>
+          </div>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-card" style="--delay:0">
+            <div class="metric-icon blue"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/></svg></div>
+            <div class="metric-data"><span class="metric-value" id="totalCenters">0</span><span class="metric-label">Total Centers</span></div>
+          </div>
+          <div class="metric-card" style="--delay:1">
+            <div class="metric-icon green"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div>
+            <div class="metric-data"><span class="metric-value" id="okCenters">0</span><span class="metric-label">Healthy</span></div>
+          </div>
+          <div class="metric-card" style="--delay:2">
+            <div class="metric-icon red"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg></div>
+            <div class="metric-data"><span class="metric-value" id="failedCenters">0</span><span class="metric-label">Failed</span></div>
+          </div>
+          <div class="metric-card" style="--delay:3">
+            <div class="metric-icon purple"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+            <div class="metric-data"><span class="metric-value text-sm" id="lastBackup">--</span><span class="metric-label">Last Backup</span></div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="glass-card fade-in" style="--delay:4">
+            <h3 class="card-title">Recent Activity</h3>
+            <div id="recentEvents" class="events-list"><p class="empty-state">No events yet</p></div>
+          </div>
+          <div class="glass-card fade-in" style="--delay:5">
+            <h3 class="card-title">Fleet Status</h3>
+            <div id="fleetStatus" class="fleet-grid"><p class="empty-state">No centers registered</p></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- CENTERS TAB -->
+      <section id="tab-centers" class="tab-panel">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Centers</h2>
+            <p class="page-subtitle">Manage your FortiGate firewalls</p>
+          </div>
+          <button class="btn-primary" onclick="toggleAddForm()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Add FortiGate
+          </button>
+        </div>
+
+        <div id="addCenterForm" class="glass-card form-card collapsed">
+          <h3 class="card-title">New FortiGate Center</h3>
+          <div class="form-grid-3">
+            <div class="input-group"><label>Name *</label><input id="centerName" placeholder="e.g. Main Office" /></div>
+            <div class="input-group"><label>FortiGate IP *</label><input id="centerIp" placeholder="e.g. 10.1.1.1" /></div>
+            <div class="input-group"><label>API Token *</label><input id="centerToken" type="password" placeholder="Enter API token" /></div>
+            <div class="input-group"><label>Location</label><input id="centerLocation" placeholder="e.g. Santo Domingo" /></div>
+            <div class="input-group"><label>Model</label><input id="centerModel" placeholder="e.g. FortiGate 100F" /></div>
+            <div class="input-group form-actions">
+              <label>&nbsp;</label>
+              <div class="btn-group">
+                <button class="btn-primary" id="addCenter" onclick="addCenter()">Add Center</button>
+                <button class="btn-ghost" onclick="toggleAddForm()">Cancel</button>
+              </div>
+            </div>
+          </div>
+          <div id="centerMessage" class="form-message"></div>
+        </div>
+
+        <div class="glass-card">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Name</th><th>Location</th><th>IP Address</th><th>Model</th><th>Status</th><th>Last Backup</th><th>Actions</th></tr></thead>
+              <tbody id="centersBody"></tbody>
+            </table>
+            <p id="centersEmpty" class="empty-state hidden">No centers registered yet. Click "Add FortiGate" to get started.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- BACKUPS TAB -->
+      <section id="tab-backups" class="tab-panel">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Backups</h2>
+            <p class="page-subtitle">View and restore configuration backups</p>
+          </div>
+          <div class="header-actions">
+            <select id="backupCenterSelect" class="select-styled" onchange="loadBackups()">
+              <option value="">Select a center…</option>
+            </select>
+          </div>
+        </div>
+        <div class="glass-card">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Date</th><th>File</th><th>Checksum</th><th>Size</th><th>Status</th><th>Actions</th></tr></thead>
+              <tbody id="backupsBody"></tbody>
+            </table>
+            <p id="backupsEmpty" class="empty-state">Select a center to view its backups</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- EVENTS TAB -->
+      <section id="tab-events" class="tab-panel">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">Event Log</h2>
+            <p class="page-subtitle">Activity and alert history</p>
+          </div>
+        </div>
+        <div class="glass-card">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Timestamp</th><th>Center</th><th>Type</th><th>Message</th></tr></thead>
+              <tbody id="eventsBody"></tbody>
+            </table>
+            <p id="eventsEmpty" class="empty-state hidden">No events recorded yet</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- USERS TAB -->
+      <section id="tab-users" class="tab-panel">
+        <div class="page-header">
+          <div>
+            <h2 class="page-title">User Management</h2>
+            <p class="page-subtitle">Manage access and permissions</p>
+          </div>
+          <button class="btn-primary" onclick="toggleUserForm()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Create User
+          </button>
+        </div>
+
+        <div id="addUserForm" class="glass-card form-card collapsed">
+          <h3 class="card-title">New User</h3>
+          <div class="form-grid-3">
+            <div class="input-group"><label>Username *</label><input id="userName" placeholder="Enter username" /></div>
+            <div class="input-group"><label>Password *</label><input id="userPassword" type="password" placeholder="Min. 6 characters" /></div>
+            <div class="input-group">
+              <label>Role</label>
+              <select id="userRole" class="select-styled">
+                <option value="operator">Operator</option>
+                <option value="viewer">Viewer</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+          </div>
+          <div class="btn-group" style="margin-top:12px">
+            <button class="btn-primary" onclick="createUser()">Create User</button>
+            <button class="btn-ghost" onclick="toggleUserForm()">Cancel</button>
+          </div>
+          <div id="userMessage" class="form-message"></div>
+        </div>
+
+        <div class="glass-card">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Username</th><th>Role</th><th>Status</th><th>Created</th><th>Actions</th></tr></thead>
+              <tbody id="usersBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- TOAST NOTIFICATIONS -->
+  <div id="toastContainer" class="toast-container"></div>
 
   <script src="app.js"></script>
 </body>

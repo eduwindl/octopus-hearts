@@ -1,106 +1,229 @@
-const API_BASE = window.API_BASE || "http://localhost:8000";
+/* ═══════════════════════════════════════════════════════════════════
+   FortiGate Backup Manager – Frontend Logic
+   ═══════════════════════════════════════════════════════════════════ */
+
+const API = window.API_BASE || `http://localhost:${location.port || 8000}`;
 const AUTH_KEY = "fgbm_auth";
 let currentUser = null;
+let centersCache = [];
 
-function getAuthHeader() {
-  const token = localStorage.getItem(AUTH_KEY);
-  if (!token) return {};
-  return { Authorization: `Basic ${token}` };
+// ── Helpers ─────────────────────────────────────────────────────────
+
+function authHeader() {
+  const t = localStorage.getItem(AUTH_KEY);
+  return t ? { Authorization: `Basic ${t}` } : {};
 }
 
-function showAuthOverlay(show) {
-  const overlay = document.getElementById("authOverlay");
-  overlay.classList.toggle("hidden", !show);
-}
-
-function setAuthError(message) {
-  document.getElementById("authError").textContent = message || "";
-}
-
-async function fetchJson(path, options = {}) {
-  const headers = {
-    ...(options.headers || {}),
-    ...getAuthHeader(),
-  };
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
-  if (!res.ok) {
-    if (res.status === 401) {
-      showAuthOverlay(true);
-      throw new Error("Unauthorized");
-    }
-    throw new Error(await res.text());
+async function api(path, opts = {}) {
+  const headers = { ...opts.headers, ...authHeader() };
+  const r = await fetch(`${API}${path}`, { ...opts, headers });
+  if (!r.ok) {
+    if (r.status === 401) { showAuth(true); throw new Error("Unauthorized"); }
+    const msg = await r.text();
+    throw new Error(msg);
   }
-  return res.json();
+  return r.json();
 }
 
-function formatDate(value) {
-  if (!value) return "--";
-  return new Date(value).toLocaleString();
+function fmtDate(v) {
+  if (!v) return "--";
+  const d = new Date(v);
+  return d.toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" })
+    + " " + d.toLocaleTimeString("en-US", { hour:"2-digit", minute:"2-digit" });
 }
+
+function fmtSize(bytes) {
+  if (!bytes) return "--";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / 1048576).toFixed(1) + " MB";
+}
+
+// ── Toast notifications ─────────────────────────────────────────────
+
+function toast(message, type = "info") {
+  const c = document.getElementById("toastContainer");
+  const el = document.createElement("div");
+  el.className = `toast ${type}`;
+  const icons = {
+    success: "✓", error: "✗", info: "ℹ"
+  };
+  el.innerHTML = `<span>${icons[type] || "ℹ"}</span> ${message}`;
+  c.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// ── Auth ────────────────────────────────────────────────────────────
+
+function showAuth(show) {
+  document.getElementById("authOverlay").classList.toggle("hidden", !show);
+}
+
+document.getElementById("authForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const user = document.getElementById("authUser").value.trim();
+  const pass = document.getElementById("authPass").value;
+  const errEl = document.getElementById("authError");
+  if (!user || !pass) { errEl.textContent = "Username and password required."; return; }
+
+  const btn = document.getElementById("authSubmit");
+  btn.disabled = true;
+  btn.querySelector(".btn-text").textContent = "Signing in…";
+  btn.querySelector(".btn-loader").classList.remove("hidden");
+
+  try {
+    localStorage.setItem(AUTH_KEY, btoa(`${user}:${pass}`));
+    errEl.textContent = "";
+    currentUser = await api("/me");
+    showAuth(false);
+    initApp();
+    toast(`Welcome back, ${currentUser.username}`, "success");
+  } catch {
+    errEl.textContent = "Invalid credentials. Please try again.";
+    localStorage.removeItem(AUTH_KEY);
+  } finally {
+    btn.disabled = false;
+    btn.querySelector(".btn-text").textContent = "Sign In";
+    btn.querySelector(".btn-loader").classList.add("hidden");
+  }
+});
+
+// ── App init ────────────────────────────────────────────────────────
+
+function initApp() {
+  document.getElementById("mainApp").classList.remove("hidden");
+  document.getElementById("currentUserName").textContent = currentUser.username;
+  document.getElementById("currentUserRole").textContent = currentUser.role;
+  document.querySelector(".avatar").textContent = currentUser.username[0].toUpperCase();
+
+  if (currentUser.role === "admin") {
+    document.getElementById("navUsers").style.display = "";
+  }
+
+  loadDashboard();
+}
+
+// ── Tab switching ───────────────────────────────────────────────────
+
+function switchTab(name) {
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".nav-item").forEach(n => n.classList.remove("active"));
+  document.getElementById(`tab-${name}`).classList.add("active");
+  document.querySelector(`[data-tab="${name}"]`).classList.add("active");
+
+  if (name === "centers") loadCenters();
+  if (name === "backups") updateBackupSelect();
+  if (name === "events") loadEvents();
+  if (name === "users") loadUsers();
+}
+
+// ── Dashboard ───────────────────────────────────────────────────────
 
 async function loadDashboard() {
-  currentUser = await fetchJson("/me");
-  const centers = await fetchJson("/centers");
-  const events = await fetchJson("/events");
+  try {
+    const [centers, events] = await Promise.all([api("/centers"), api("/events")]);
+    centersCache = centers;
 
-  document.getElementById("totalCenters").textContent = centers.length;
-  const lastBackup = centers
-    .map((c) => c.last_backup)
-    .filter(Boolean)
-    .sort()
-    .pop();
-  document.getElementById("lastBackup").textContent = formatDate(lastBackup);
-  const failed = centers.filter((c) => c.status === "FAILED").length;
-  document.getElementById("failedCenters").textContent = failed;
+    animateCounter("totalCenters", centers.length);
+    animateCounter("okCenters", centers.filter(c => c.status === "OK").length);
+    animateCounter("failedCenters", centers.filter(c => c.status === "FAILED").length);
 
-  const tbody = document.getElementById("centersBody");
-  tbody.innerHTML = "";
-  centers.forEach((c) => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${c.name}</td>
-      <td>${c.fortigate_ip}</td>
-      <td>${c.model || "--"}</td>
-      <td class="${c.status === "OK" ? "status-ok" : "status-failed"}">${c.status}</td>
-      <td>${formatDate(c.last_backup)}</td>
-      <td><button data-id="${c.id}" class="primary">Run</button></td>
-    `;
-    tbody.appendChild(tr);
-  });
+    const dates = centers.map(c => c.last_backup).filter(Boolean).sort();
+    document.getElementById("lastBackup").textContent = dates.length ? fmtDate(dates[dates.length - 1]) : "--";
 
-  tbody.querySelectorAll("button").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      await fetchJson(`/backups/run/${btn.dataset.id}`, { method: "POST" });
-      await loadDashboard();
-    });
-  });
+    // Recent events
+    const evtEl = document.getElementById("recentEvents");
+    if (events.length === 0) {
+      evtEl.innerHTML = '<p class="empty-state">No events yet</p>';
+    } else {
+      evtEl.innerHTML = events.slice(0, 8).map((e, i) => {
+        const dotClass = e.event_type.includes("FAIL") ? "fail"
+          : e.event_type.includes("OK") || e.event_type.includes("SUCCESS") ? "ok" : "info";
+        return `<div class="event-item" style="animation-delay:${i * 0.05}s">
+          <div class="event-dot ${dotClass}"></div>
+          <div class="event-content">
+            <div class="event-msg">${esc(e.message)}</div>
+            <div class="event-time">${fmtDate(e.timestamp)}</div>
+          </div>
+        </div>`;
+      }).join("");
+    }
 
-  const eventsContainer = document.getElementById("events");
-  eventsContainer.innerHTML = "";
-  events.slice(0, 6).forEach((e) => {
-    const div = document.createElement("div");
-    div.className = "event";
-    div.textContent = `${formatDate(e.timestamp)} | ${e.event_type} | ${e.message}`;
-    eventsContainer.appendChild(div);
-  });
-
-  const adminPanel = document.getElementById("adminPanel");
-  if (currentUser && currentUser.role === "admin") {
-    adminPanel.classList.remove("hidden");
-    await loadUsers();
-  } else {
-    adminPanel.classList.add("hidden");
+    // Fleet status
+    const fleetEl = document.getElementById("fleetStatus");
+    if (centers.length === 0) {
+      fleetEl.innerHTML = '<p class="empty-state">No centers registered</p>';
+    } else {
+      fleetEl.innerHTML = centers.map((c, i) => {
+        const cls = c.status === "OK" ? "ok" : c.status === "FAILED" ? "failed" : "unknown";
+        return `<div class="fleet-item" style="animation-delay:${i * 0.04}s">
+          <div><div class="fleet-name">${esc(c.name)}</div><div class="fleet-ip">${esc(c.fortigate_ip)}</div></div>
+          <span class="status-badge ${cls}">${c.status}</span>
+        </div>`;
+      }).join("");
+    }
+  } catch (err) {
+    if (err.message !== "Unauthorized") toast("Failed to load dashboard", "error");
   }
 }
 
-async function runAll() {
-  await fetchJson("/backups/run", { method: "POST" });
-  await loadDashboard();
+function animateCounter(id, target) {
+  const el = document.getElementById(id);
+  const start = parseInt(el.textContent) || 0;
+  const diff = target - start;
+  if (diff === 0) { el.textContent = target; return; }
+  const duration = 600;
+  const startTime = performance.now();
+  function step(now) {
+    const progress = Math.min((now - startTime) / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(start + diff * eased);
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
 }
 
-document.getElementById("runAll").addEventListener("click", runAll);
+// ── Centers ─────────────────────────────────────────────────────────
 
-document.getElementById("addCenter").addEventListener("click", async () => {
+async function loadCenters() {
+  try {
+    const centers = await api("/centers");
+    centersCache = centers;
+    const tbody = document.getElementById("centersBody");
+    const empty = document.getElementById("centersEmpty");
+
+    if (centers.length === 0) {
+      tbody.innerHTML = "";
+      empty.classList.remove("hidden");
+      return;
+    }
+    empty.classList.add("hidden");
+
+    tbody.innerHTML = centers.map((c, i) => {
+      const cls = c.status === "OK" ? "ok" : c.status === "FAILED" ? "failed" : "unknown";
+      return `<tr style="animation: eventIn 0.3s ease ${i * 0.04}s backwards">
+        <td><strong>${esc(c.name)}</strong></td>
+        <td>${esc(c.location || "--")}</td>
+        <td><code style="color:var(--accent)">${esc(c.fortigate_ip)}</code></td>
+        <td>${esc(c.model || "--")}</td>
+        <td><span class="status-badge ${cls}">${c.status}</span></td>
+        <td>${fmtDate(c.last_backup)}</td>
+        <td><div class="actions">
+          <button class="btn-sm action" onclick="runBackup(${c.id})">▶ Backup</button>
+          <button class="btn-sm danger" onclick="deleteCenter(${c.id},'${esc(c.name)}')">✗ Delete</button>
+        </div></td>
+      </tr>`;
+    }).join("");
+  } catch (err) {
+    if (err.message !== "Unauthorized") toast("Failed to load centers", "error");
+  }
+}
+
+function toggleAddForm() {
+  document.getElementById("addCenterForm").classList.toggle("collapsed");
+}
+
+async function addCenter() {
   const payload = {
     name: document.getElementById("centerName").value.trim(),
     location: document.getElementById("centerLocation").value.trim() || null,
@@ -108,108 +231,233 @@ document.getElementById("addCenter").addEventListener("click", async () => {
     model: document.getElementById("centerModel").value.trim() || null,
     api_token: document.getElementById("centerToken").value.trim(),
   };
+  const msgEl = document.getElementById("centerMessage");
   if (!payload.name || !payload.fortigate_ip || !payload.api_token) {
-    document.getElementById("centerMessage").textContent = "Name, IP and token are required.";
+    msgEl.textContent = "Name, IP and API Token are required.";
+    msgEl.className = "form-message error";
     return;
   }
   try {
-    await fetchJson("/centers", {
+    await api("/centers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    document.getElementById("centerMessage").textContent = "Center created.";
-    await loadDashboard();
+    msgEl.textContent = "";
+    ["centerName","centerLocation","centerIp","centerModel","centerToken"].forEach(
+      id => document.getElementById(id).value = "");
+    toggleAddForm();
+    toast(`Center "${payload.name}" added successfully`, "success");
+    loadCenters();
+    loadDashboard();
   } catch (err) {
-    document.getElementById("centerMessage").textContent = `Error: ${err.message}`;
+    msgEl.textContent = err.message;
+    msgEl.className = "form-message error";
   }
-});
+}
 
-document.getElementById("createUser").addEventListener("click", async () => {
+async function deleteCenter(id, name) {
+  if (!confirm(`Delete "${name}" and all its backups?\nThis cannot be undone.`)) return;
+  try {
+    await api(`/centers/${id}`, { method: "DELETE" });
+    toast(`"${name}" deleted`, "info");
+    loadCenters();
+    loadDashboard();
+  } catch (err) { toast(err.message, "error"); }
+}
+
+async function runBackup(centerId) {
+  toast("Starting backup…", "info");
+  try {
+    await api(`/backups/run/${centerId}`, { method: "POST" });
+    toast("Backup completed!", "success");
+    loadCenters();
+    loadDashboard();
+  } catch (err) { toast(`Backup failed: ${err.message}`, "error"); }
+}
+
+async function runAllBackups() {
+  const btn = document.getElementById("runAll");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="btn-loader"></span> Running…';
+  toast("Running backups for all centers…", "info");
+  try {
+    await api("/backups/run", { method: "POST" });
+    toast("All backups completed!", "success");
+    loadCenters();
+    loadDashboard();
+  } catch (err) { toast(`Backup run failed: ${err.message}`, "error"); }
+  finally {
+    btn.disabled = false;
+    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg> Run All Backups`;
+  }
+}
+
+// ── Backups ─────────────────────────────────────────────────────────
+
+function updateBackupSelect() {
+  const sel = document.getElementById("backupCenterSelect");
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Select a center…</option>'
+    + centersCache.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join("");
+  sel.value = current;
+}
+
+async function loadBackups() {
+  const centerId = document.getElementById("backupCenterSelect").value;
+  const tbody = document.getElementById("backupsBody");
+  const empty = document.getElementById("backupsEmpty");
+  if (!centerId) { tbody.innerHTML = ""; empty.classList.remove("hidden"); return; }
+
+  try {
+    const backups = await api(`/backups?center_id=${centerId}`);
+    if (backups.length === 0) {
+      tbody.innerHTML = "";
+      empty.textContent = "No backups found for this center";
+      empty.classList.remove("hidden");
+      return;
+    }
+    empty.classList.add("hidden");
+
+    tbody.innerHTML = backups.map((b, i) => {
+      const hash = b.checksum ? b.checksum.substring(0, 16) + "…" : "--";
+      const cls = b.status === "OK" ? "ok" : "failed";
+      return `<tr style="animation: eventIn 0.3s ease ${i * 0.04}s backwards">
+        <td>${fmtDate(b.backup_date)}</td>
+        <td style="font-size:0.8rem; color:var(--text-muted)">${esc(b.file_path || "--")}</td>
+        <td><code style="font-size:0.8rem">${hash}</code></td>
+        <td>${fmtSize(b.size)}</td>
+        <td><span class="status-badge ${cls}">${b.status}</span></td>
+        <td><button class="btn-sm action" onclick="restoreBackup(${b.id})">⏪ Restore</button></td>
+      </tr>`;
+    }).join("");
+  } catch (err) { toast("Failed to load backups", "error"); }
+}
+
+async function restoreBackup(id) {
+  if (!confirm("Restore this configuration to the FortiGate?\nThis will overwrite the current config.")) return;
+  toast("Restoring configuration…", "info");
+  try {
+    await api(`/backups/${id}/restore`, { method: "POST" });
+    toast("Restore completed!", "success");
+  } catch (err) { toast(`Restore failed: ${err.message}`, "error"); }
+}
+
+// ── Events ──────────────────────────────────────────────────────────
+
+async function loadEvents() {
+  try {
+    const events = await api("/events");
+    const tbody = document.getElementById("eventsBody");
+    const empty = document.getElementById("eventsEmpty");
+
+    if (events.length === 0) {
+      tbody.innerHTML = "";
+      empty.classList.remove("hidden");
+      return;
+    }
+    empty.classList.add("hidden");
+
+    tbody.innerHTML = events.slice(0, 50).map((e, i) => {
+      const typeClass = e.event_type.includes("FAIL") ? "failed"
+        : e.event_type.includes("OK") || e.event_type.includes("SUCCESS") ? "ok" : "unknown";
+      return `<tr style="animation: eventIn 0.3s ease ${i * 0.03}s backwards">
+        <td style="white-space:nowrap">${fmtDate(e.timestamp)}</td>
+        <td><strong>${esc(e.center_name || "--")}</strong></td>
+        <td><span class="status-badge ${typeClass}">${esc(e.event_type)}</span></td>
+        <td>${esc(e.message)}</td>
+      </tr>`;
+    }).join("");
+  } catch (err) { toast("Failed to load events", "error"); }
+}
+
+// ── Users ───────────────────────────────────────────────────────────
+
+function toggleUserForm() {
+  document.getElementById("addUserForm").classList.toggle("collapsed");
+}
+
+async function loadUsers() {
+  try {
+    const users = await api("/users");
+    const tbody = document.getElementById("usersBody");
+
+    tbody.innerHTML = users.map((u, i) => {
+      const cls = u.is_active ? "ok" : "failed";
+      const statusText = u.is_active ? "Active" : "Disabled";
+      const actions = u.username === currentUser.username ? '<span style="color:var(--text-muted)">You</span>'
+        : `<div class="actions">
+            ${u.is_active
+              ? `<button class="btn-sm danger" onclick="toggleUser(${u.id}, false)">Disable</button>`
+              : `<button class="btn-sm success" onclick="toggleUser(${u.id}, true)">Enable</button>`}
+          </div>`;
+      return `<tr style="animation: eventIn 0.3s ease ${i * 0.04}s backwards">
+        <td><strong>${esc(u.username)}</strong></td>
+        <td style="text-transform:capitalize">${esc(u.role)}</td>
+        <td><span class="status-badge ${cls}">${statusText}</span></td>
+        <td>${fmtDate(u.created_at)}</td>
+        <td>${actions}</td>
+      </tr>`;
+    }).join("");
+  } catch (err) { toast("Failed to load users", "error"); }
+}
+
+async function createUser() {
   const payload = {
     username: document.getElementById("userName").value.trim(),
     password: document.getElementById("userPassword").value,
     role: document.getElementById("userRole").value,
   };
+  const msgEl = document.getElementById("userMessage");
   if (!payload.username || !payload.password) {
-    document.getElementById("userMessage").textContent = "Username and password are required.";
+    msgEl.textContent = "Username and password required.";
+    msgEl.className = "form-message error";
     return;
   }
   try {
-    await fetchJson("/users", {
+    await api("/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    document.getElementById("userMessage").textContent = "User created.";
-    await loadUsers();
+    ["userName","userPassword"].forEach(id => document.getElementById(id).value = "");
+    toggleUserForm();
+    toast(`User "${payload.username}" created`, "success");
+    loadUsers();
   } catch (err) {
-    document.getElementById("userMessage").textContent = `Error: ${err.message}`;
+    msgEl.textContent = err.message;
+    msgEl.className = "form-message error";
   }
-});
-
-document.getElementById("updateMyPassword").addEventListener("click", async () => {
-  const newPassword = document.getElementById("myNewPassword").value;
-  if (!newPassword) {
-    document.getElementById("myPasswordMessage").textContent = "Password required.";
-    return;
-  }
-  try {
-    await fetchJson(`/users/${currentUser.id}/password`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ new_password: newPassword }),
-    });
-    document.getElementById("myPasswordMessage").textContent = "Password updated.";
-  } catch (err) {
-    document.getElementById("myPasswordMessage").textContent = `Error: ${err.message}`;
-  }
-});
-
-document.getElementById("authSubmit").addEventListener("click", async () => {
-  const user = document.getElementById("authUser").value.trim();
-  const pass = document.getElementById("authPass").value;
-  if (!user || !pass) {
-    setAuthError("Username and password required.");
-    return;
-  }
-  const token = btoa(`${user}:${pass}`);
-  localStorage.setItem(AUTH_KEY, token);
-  setAuthError("");
-  try {
-    await loadDashboard();
-    showAuthOverlay(false);
-  } catch (err) {
-    setAuthError("Invalid credentials.");
-  }
-});
-
-const existingAuth = localStorage.getItem(AUTH_KEY);
-showAuthOverlay(!existingAuth);
-if (existingAuth) {
-  loadDashboard().catch(() => showAuthOverlay(true));
 }
 
-async function loadUsers() {
-  const users = await fetchJson("/users");
-  const tbody = document.getElementById("usersBody");
-  tbody.innerHTML = "";
-  users.forEach((u) => {
-    const tr = document.createElement("tr");
-    const status = u.is_active ? "Active" : "Disabled";
-    const action = u.is_active ? `<button data-id="${u.id}" class="primary">Disable</button>` : "--";
-    tr.innerHTML = `
-      <td>${u.username}</td>
-      <td>${u.role}</td>
-      <td>${status}</td>
-      <td>${action}</td>
-    `;
-    tbody.appendChild(tr);
-  });
-  tbody.querySelectorAll("button").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      await fetchJson(`/users/${btn.dataset.id}/disable`, { method: "PUT" });
-      await loadUsers();
-    });
-  });
+async function toggleUser(id, activate) {
+  try {
+    const endpoint = activate ? `/users/${id}/enable` : `/users/${id}/disable`;
+    await api(endpoint, { method: "PUT" });
+    toast(`User ${activate ? "enabled" : "disabled"}`, "info");
+    loadUsers();
+  } catch (err) { toast(err.message, "error"); }
 }
+
+// ── Utility ─────────────────────────────────────────────────────────
+
+function esc(s) {
+  if (!s) return "";
+  const d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ── Boot ────────────────────────────────────────────────────────────
+
+(async function boot() {
+  const existing = localStorage.getItem(AUTH_KEY);
+  if (!existing) { showAuth(true); return; }
+  try {
+    currentUser = await api("/me");
+    showAuth(false);
+    initApp();
+  } catch {
+    showAuth(true);
+  }
+})();
