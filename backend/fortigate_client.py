@@ -90,17 +90,21 @@ def fetch_config_with_credentials(fortigate_ip: str, username: str, password: st
         timeout=settings.fortigate_timeout_seconds,
     )
 
-    # Automatic fallback for restricted admins (e.g. prof_admin) that only have VDOM access
+    # Fallbacks for restricted admins (e.g. prof_admin) that get 403 on scope=global
     if response.status_code in (403, 401):
-        fallback_params = {"scope": "vdom", "vdom": "root", "destination": "file"}
-        fallback_response = session.get(
-            f"{base_url}{BACKUP_ENDPOINT}",
-            params=fallback_params,
-            headers=headers,
-            timeout=settings.fortigate_timeout_seconds,
-        )
-        if fallback_response.ok:
-            response = fallback_response
+        for fallback_params in [
+            {"scope": "vdom", "vdom": "root", "destination": "file"},
+            {"destination": "file"},
+        ]:
+            fallback_response = session.get(
+                f"{base_url}{BACKUP_ENDPOINT}",
+                params=fallback_params,
+                headers=headers,
+                timeout=settings.fortigate_timeout_seconds,
+            )
+            if fallback_response.ok:
+                response = fallback_response
+                break
 
     try:
         response.raise_for_status()
@@ -137,14 +141,19 @@ def restore_config(fortigate_ip: str, api_token: str, content: bytes) -> None:
         verify=settings.fortigate_verify_ssl,
     )
 
+    # Fallback to VDOM scope or no scope if global is denied
     if response.status_code in (403, 401):
-        params_fallback = {"scope": "vdom", "vdom": "root"}
-        files_fallback = {"file": ("config.conf", content)}
-        fallback_res = requests.post(
-            url, headers=headers, params=params_fallback, files=files_fallback, timeout=settings.fortigate_timeout_seconds, verify=settings.fortigate_verify_ssl
-        )
-        if fallback_res.ok:
-            response = fallback_res
+        for params_fallback in [
+            {"scope": "vdom", "vdom": "root"},
+            {},
+        ]:
+            files_fallback = {"file": ("config.conf", content)}
+            fallback_res = requests.post(
+                url, headers=headers, params=params_fallback, files=files_fallback, timeout=settings.fortigate_timeout_seconds, verify=settings.fortigate_verify_ssl
+            )
+            if fallback_res.ok:
+                response = fallback_res
+                break
 
     try:
         response.raise_for_status()
@@ -208,17 +217,21 @@ def restore_config_with_credentials(fortigate_ip: str, username: str, password: 
     )
 
     if response.status_code in (403, 401):
-        fallback_params = {"scope": "vdom", "vdom": "root"}
-        files_fallback = {"file": ("config.conf", content)}
-        fallback_response = session.post(
-            f"{base_url}{settings.fortigate_restore_endpoint}",
-            headers=headers,
-            params=fallback_params,
-            files=files_fallback,
-            timeout=settings.fortigate_timeout_seconds,
-        )
-        if fallback_response.ok:
-            response = fallback_response
+        for fallback_params in [
+            {"scope": "vdom", "vdom": "root"},
+            {},
+        ]:
+            files_fallback = {"file": ("config.conf", content)}
+            fallback_response = session.post(
+                f"{base_url}{settings.fortigate_restore_endpoint}",
+                headers=headers,
+                params=fallback_params,
+                files=files_fallback,
+                timeout=settings.fortigate_timeout_seconds,
+            )
+            if fallback_response.ok:
+                response = fallback_response
+                break
 
     try:
         response.raise_for_status()
