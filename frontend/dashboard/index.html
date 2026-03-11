@@ -24,28 +24,44 @@
             <span class="dot"></span><span class="dot"></span><span class="dot"></span>
           </div>
         </div>
-        <div class="terminal-body" id="terminalBody">
-          <pre class="ascii-art" id="asciiArt"></pre>
-          <div id="bootLog" class="boot-log"></div>
-          <div id="loginPrompt" class="login-section hidden">
-            <div class="prompt-line">
-              <span class="prompt-user">root@fgbm</span><span class="prompt-sep">:</span><span class="prompt-path">~</span><span class="prompt-dollar">$</span>
-              <span class="prompt-cmd">login --secure</span>
+        <div class="terminal-body terminal-split">
+          <div class="terminal-left" id="terminalBody">
+            <pre class="ascii-art" id="asciiArt"></pre>
+            <div id="bootLog" class="boot-log"></div>
+            <div id="loginPrompt" class="login-section hidden">
+              <div class="prompt-line">
+                <span class="prompt-user">root@fgbm</span><span class="prompt-sep">:</span><span class="prompt-path">~</span><span class="prompt-dollar">$</span>
+                <span class="prompt-cmd">login --secure</span>
+              </div>
+              <form id="authForm" onsubmit="return false;">
+                <div class="terminal-input-row">
+                  <label class="terminal-label">USERNAME:</label>
+                  <input id="authUser" type="text" class="terminal-input" autocomplete="username" autofocus />
+                </div>
+                <div class="terminal-input-row">
+                  <label class="terminal-label">PASSWORD:</label>
+                  <input id="authPass" type="password" class="terminal-input" autocomplete="current-password" />
+                </div>
+                <div class="terminal-input-row" style="margin-top:12px">
+                  <button id="authSubmit" class="terminal-btn" type="submit">[ AUTHENTICATE ]</button>
+                </div>
+                <div id="authError" class="terminal-error"></div>
+              </form>
             </div>
-            <form id="authForm" onsubmit="return false;">
-              <div class="terminal-input-row">
-                <label class="terminal-label">USERNAME:</label>
-                <input id="authUser" type="text" class="terminal-input" autocomplete="username" autofocus />
-              </div>
-              <div class="terminal-input-row">
-                <label class="terminal-label">PASSWORD:</label>
-                <input id="authPass" type="password" class="terminal-input" autocomplete="current-password" />
-              </div>
-              <div class="terminal-input-row" style="margin-top:12px">
-                <button id="authSubmit" class="terminal-btn" type="submit">[ AUTHENTICATE ]</button>
-              </div>
-              <div id="authError" class="terminal-error"></div>
-            </form>
+          </div>
+          <div class="terminal-right hidden" id="manateeContainer">
+            <pre id="manateeArt" class="manatee-ascii"></pre>
+            <div id="neofetchInfo" class="neofetch-info">
+              <div><span class="uf-user">root</span>@<span class="uf-host">fgbm-secure</span></div>
+              <div class="uf-sep">-------------------</div>
+              <div><span class="uf-key">OS</span>: FortiGate Backup OS</div>
+              <div><span class="uf-key">Kernel</span>: FGBM-Engine-v1.7.1</div>
+              <div><span class="uf-key">Uptime</span>: <span id="vmUptime">0m</span></div>
+              <div><span class="uf-key">Packages</span>: 317</div>
+              <div><span class="uf-key">Shell</span>: bash</div>
+              <div><span class="uf-key">CPU</span>: Intel Core i9-14900K</div>
+              <div><span class="uf-key">Memory</span>: 31MB / 16384MB</div>
+            </div>
           </div>
         </div>
       </div>

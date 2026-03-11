@@ -94,12 +94,93 @@ const BOOT_MESSAGES = [
   { text: "<span class='info'>Authentication required. Enter credentials below.</span>", delay: 1700 },
 ];
 
+const MANATEE_FRAMES = [
+`
+             .oO00000000000000Oo.
+          .d0000000000000000000000d.
+        .k00000000000000000000000000k.
+       c0000000      0000      0000000c
+      l00000000      0000      00000000l
+     l000000000  ██  0000  ██  000000000l
+    .0000000000      0000      0000000000.
+    l000000000000000O:___:O00000000000000l
+    O0000000000000000\\___/000000000000000O
+    O000000000000000000000000000000000000O
+    o000000000000000000000000000000000000o
+    .000000000000000000000000000000000000.
+  _ .O0000000000000000000000000000000000O.
+ / \\|00000000000000000000000000000000000|
+|   |000000000000000000000000000000000000|
+ \\ / 000000000000000000000000000000000000
+  ~  .0000000000000000000000000000000000.
+      k00000000000000000000000000000000k
+       d0000000000000000000000000000000d
+        :O000000000000000000000000000O:
+          cO000000000000000000000000Oc
+             'loxO0000000000000Oxdl'
+`,
+`
+             .oO00000000000000Oo.
+          .d0000000000000000000000d.
+        .k00000000000000000000000000k.
+       c0000000      0000      0000000c
+      l00000000      0000      00000000l
+     l000000000  ██  0000  --  000000000l
+    .0000000000      0000      0000000000.
+    l000000000000000O:___:O00000000000000l
+    O0000000000000000\\___/000000000000000O
+    O000000000000000000000000000000000000O
+    o000000000000000000000000000000000000o
+    .000000000000000000000000000000000000.  _
+  _ .O0000000000000000000000000000000000O. //
+ / \\|00000000000000000000000000000000000| //
+|   |000000000000000000000000000000000000|//
+ \\ / 000000000000000000000000000000000000
+  ~  .0000000000000000000000000000000000.
+      k00000000000000000000000000000000k
+       d0000000000000000000000000000000d
+        :O000000000000000000000000000O:
+          cO000000000000000000000000Oc
+             'loxO0000000000000Oxdl'
+`
+];
+
+let manateeTimer = null;
+let currentFrame = 0;
+function startManateeAnimation() {
+  const el = document.getElementById("manateeArt");
+  if (!el) return;
+  const loop = () => {
+    el.textContent = MANATEE_FRAMES[currentFrame];
+    if (currentFrame === 0) {
+      if (Math.random() > 0.8) {
+        currentFrame = 1;
+        manateeTimer = setTimeout(loop, 400); // wink & wave duration
+      } else {
+        manateeTimer = setTimeout(loop, 1000 + Math.random() * 2000); // normal duration
+      }
+    } else {
+      currentFrame = 0;
+      manateeTimer = setTimeout(loop, 1000 + Math.random() * 1500); // back to normal
+    }
+  };
+  loop();
+}
+
 function runBootSequence() {
   const artEl = document.getElementById("asciiArt");
   const bootEl = document.getElementById("bootLog");
   const loginEl = document.getElementById("loginPrompt");
+  const manateeContainer = document.getElementById("manateeContainer");
 
-  // Type out ASCII art
+  // Reset animations and states
+  bootEl.innerHTML = "";
+  loginEl.classList.add("hidden");
+  manateeContainer.classList.remove("show");
+  manateeContainer.classList.add("hidden");
+  clearTimeout(manateeTimer);
+
+  // Type out ASCII art for LOGO
   artEl.textContent = ASCII_LOGO;
 
   // Boot messages with staggered delays
@@ -113,6 +194,17 @@ function runBootSequence() {
       // Auto scroll
       const body = document.getElementById("terminalBody");
       body.scrollTop = body.scrollHeight;
+
+      // Reveal manatee half way through boot
+      if (i === 4) {
+        manateeContainer.classList.remove("hidden");
+        // small delay before fade in
+        setTimeout(() => {
+          manateeContainer.classList.add("show");
+          startManateeAnimation();
+        }, 50);
+      }
+
     }, msg.delay);
   });
 
