@@ -9,6 +9,17 @@ let currentUser = null;
 let centersCache = [];
 let contextCenterData = null; // for right-click context menu
 
+function autoFillPort(tagSelectId, portInputId) {
+  const tag = document.getElementById(tagSelectId).value;
+  const portInput = document.getElementById(portInputId);
+  if (tag === "minerd") {
+    portInput.value = "10443";
+  } else {
+    // Leave alone or revert to default 443 if it was specifically 10443
+    if (portInput.value === "10443") portInput.value = "443";
+  }
+}
+
 // ── Helpers ─────────────────────────────────────────────────────────
 
 function authHeader() {
@@ -461,10 +472,15 @@ function toggleBulkForm() {
 
 async function addCenter() {
   const authMode = document.getElementById("centerAuthMode").value;
+  let rawIp = document.getElementById("centerIp").value.trim();
+  let port = document.getElementById("centerPort").value.trim();
+  let fullIp = port && port !== "443" ? `${rawIp}:${port}` : rawIp;
+  if (rawIp && port === "443" && !rawIp.includes(":")) fullIp = rawIp; // fallback clean
+
   const payload = {
     name: document.getElementById("centerName").value.trim(),
     location: document.getElementById("centerLocation").value.trim() || null,
-    fortigate_ip: document.getElementById("centerIp").value.trim(),
+    fortigate_ip: fullIp,
     model: document.getElementById("centerModel").value.trim() || null,
     tag: document.getElementById("centerTag").value || null,
     auth_mode: authMode,
@@ -655,7 +671,16 @@ function openEditModal(centerId) {
 
   document.getElementById("editCenterId").value = center.id;
   document.getElementById("editName").value = center.name || "";
-  document.getElementById("editIp").value = center.fortigate_ip || "";
+  
+  if (center.fortigate_ip && center.fortigate_ip.includes(":")) {
+    const parts = center.fortigate_ip.split(":");
+    document.getElementById("editIp").value = parts[0];
+    document.getElementById("editPort").value = parts[1];
+  } else {
+    document.getElementById("editIp").value = center.fortigate_ip || "";
+    document.getElementById("editPort").value = "443";
+  }
+
   document.getElementById("editTag").value = center.tag || "";
   document.getElementById("editAuthMode").value = center.auth_mode || "credentials";
   document.getElementById("editFgUser").value = center.fortigate_username || "";
@@ -681,9 +706,15 @@ document.addEventListener("keydown", (e) => {
 async function saveEditCenter() {
   const id = document.getElementById("editCenterId").value;
   const authMode = document.getElementById("editAuthMode").value;
+  
+  let rawIp = document.getElementById("editIp").value.trim();
+  let port = document.getElementById("editPort").value.trim();
+  let fullIp = port && port !== "443" ? `${rawIp}:${port}` : rawIp;
+  if (rawIp && port === "443" && !rawIp.includes(":")) fullIp = rawIp; // fallback clean
+
   const payload = {
     name: document.getElementById("editName").value.trim(),
-    fortigate_ip: document.getElementById("editIp").value.trim(),
+    fortigate_ip: fullIp,
     tag: document.getElementById("editTag").value || null,
     auth_mode: authMode,
     location: document.getElementById("editLocation").value.trim() || null,

@@ -200,8 +200,8 @@
           <div class="term-card-header">┌── New FortiGate Center ──</div>
           <div class="form-grid-3">
             <div class="input-group"><label>Name *</label><input id="centerName" placeholder="e.g. Main Office" /></div>
-            <div class="input-group"><label>FortiGate IP *</label><input id="centerIp" placeholder="e.g. 10.1.1.1" /></div>
-            <div class="input-group"><label>Tag</label><select id="centerTag" class="select-term"><option value="">No Tag</option><option value="minerd">MINERD</option><option value="transi">TRANSI</option><option value="unphu">UNPHU</option><option value="lanco">LANCO</option></select></div>
+            <div class="input-group"><label>FortiGate IP *</label><div style="display:flex;gap:4px;"><input id="centerIp" placeholder="e.g. 10.1.1.1" style="flex:1" /><input id="centerPort" placeholder="Port" value="443" style="width:60px" /></div></div>
+            <div class="input-group"><label>Tag</label><select id="centerTag" class="select-term" onchange="autoFillPort('centerTag', 'centerPort')"><option value="">No Tag</option><option value="minerd">MINERD</option><option value="transi">TRANSI</option><option value="unphu">UNPHU</option><option value="lanco">LANCO</option></select></div>
             <div class="input-group"><label>Auth Mode</label><select id="centerAuthMode" class="select-term" onchange="toggleAuthFields()"><option value="credentials">Username / Password</option><option value="token">API Token</option></select></div>
             <div class="input-group auth-cred-field"><label>FG Username *</label><input id="centerFgUser" placeholder="e.g. admin" /></div>
             <div class="input-group auth-cred-field"><label>FG Password *</label><input id="centerFgPass" type="password" placeholder="FortiGate password" /></div>
@@ -368,8 +368,8 @@
       <div class="form-grid-3">
         <input type="hidden" id="editCenterId" />
         <div class="input-group"><label>Name</label><input id="editName" /></div>
-        <div class="input-group"><label>FortiGate IP</label><input id="editIp" /></div>
-        <div class="input-group"><label>Tag</label><select id="editTag" class="select-term"><option value="">No Tag</option><option value="minerd">MINERD</option><option value="transi">TRANSI</option><option value="unphu">UNPHU</option><option value="lanco">LANCO</option></select></div>
+        <div class="input-group"><label>FortiGate IP</label><div style="display:flex;gap:4px;"><input id="editIp" style="flex:1" /><input id="editPort" placeholder="Port" value="443" style="width:60px" /></div></div>
+        <div class="input-group"><label>Tag</label><select id="editTag" class="select-term" onchange="autoFillPort('editTag', 'editPort')"><option value="">No Tag</option><option value="minerd">MINERD</option><option value="transi">TRANSI</option><option value="unphu">UNPHU</option><option value="lanco">LANCO</option></select></div>
         <div class="input-group"><label>Auth Mode</label><select id="editAuthMode" class="select-term" onchange="toggleEditAuthFields()"><option value="credentials">Username / Password</option><option value="token">API Token</option></select></div>
         <div class="input-group edit-cred-field"><label>Username</label><input id="editFgUser" /></div>
         <div class="input-group edit-cred-field"><label>Password</label><input id="editFgPass" type="password" placeholder="Leave blank to keep" /></div>
