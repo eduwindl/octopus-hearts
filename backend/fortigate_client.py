@@ -34,7 +34,7 @@ def fetch_config_with_credentials(fortigate_ip: str, username: str, password: st
     # Step 1: Login via /logincheck
     login_response = session.post(
         f"{base_url}{LOGIN_ENDPOINT}",
-        data={"username": username, "secretkey": password},
+        data={"username": username, "secretkey": password, "ajax": "1"},
         timeout=settings.fortigate_timeout_seconds,
     )
 
@@ -60,7 +60,7 @@ def fetch_config_with_credentials(fortigate_ip: str, username: str, password: st
         headers["X-CSRFTOKEN"] = csrf_token
 
     # Step 3: Download the backup
-    params = {"scope": "global"}
+    params = {"scope": "global", "destination": "file"}
     response = session.get(
         f"{base_url}{BACKUP_ENDPOINT}",
         params=params,
@@ -72,7 +72,7 @@ def fetch_config_with_credentials(fortigate_ip: str, username: str, password: st
 
     # Step 4: Logout cleanly
     try:
-        session.post(f"{base_url}{LOGOUT_ENDPOINT}", timeout=5)
+        session.post(f"{base_url}{LOGOUT_ENDPOINT}", data={"ajax": "1"}, headers=headers, timeout=5)
     except Exception:
         pass
 
@@ -107,7 +107,7 @@ def restore_config_with_credentials(fortigate_ip: str, username: str, password: 
     # Login
     session.post(
         f"{base_url}{LOGIN_ENDPOINT}",
-        data={"username": username, "secretkey": password},
+        data={"username": username, "secretkey": password, "ajax": "1"},
         timeout=settings.fortigate_timeout_seconds,
     )
 
@@ -134,6 +134,6 @@ def restore_config_with_credentials(fortigate_ip: str, username: str, password: 
     response.raise_for_status()
 
     try:
-        session.post(f"{base_url}{LOGOUT_ENDPOINT}", timeout=5)
+        session.post(f"{base_url}{LOGOUT_ENDPOINT}", data={"ajax": "1"}, headers=headers, timeout=5)
     except Exception:
         pass
