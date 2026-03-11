@@ -13,7 +13,7 @@ def ensure_center_dir(center_name: str) -> Path:
 
 def write_backup(center_name: str, content: bytes) -> tuple[Path, str, int]:
     center_dir = ensure_center_dir(center_name)
-    filename = f"{datetime.now(timezone.utc).date().isoformat()}.conf"
+    filename = f"{datetime.now(timezone.utc).strftime('%Y-%m-%d_%H%M%S')}.conf"
     file_path = center_dir / filename
     file_path.write_bytes(content)
     checksum = hashlib.sha256(content).hexdigest()

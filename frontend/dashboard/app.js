@@ -293,10 +293,19 @@ function animateCounter(id, target) {
 
 // ── Centers ─────────────────────────────────────────────────────────
 
+let searchTimer = null;
+function debouncedSearch() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => loadCenters(), 300);
+}
+
 async function loadCenters() {
   try {
     const tagFilter = document.getElementById("tagFilterCenters")?.value || "";
-    const url = tagFilter ? `/centers?tag=${tagFilter}` : "/centers";
+    const searchQuery = document.getElementById("centerSearch")?.value.trim() || "";
+    let url = "/centers?";
+    if (tagFilter) url += `tag=${encodeURIComponent(tagFilter)}&`;
+    if (searchQuery) url += `q=${encodeURIComponent(searchQuery)}&`;
     const centers = await api(url);
     centersCache = centers;
     const tbody = document.getElementById("centersBody");

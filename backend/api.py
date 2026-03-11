@@ -144,6 +144,18 @@ def disable_user(user_id: int, db: Session = Depends(get_db)):
     return user
 
 
+@app.put("/users/{user_id}/enable", response_model=schemas.UserOut, dependencies=[Depends(require_admin)])
+def enable_user(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.is_active = True
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 @app.put("/users/{user_id}/password", response_model=schemas.UserOut)
 def update_password(
     user_id: int,
@@ -202,11 +214,18 @@ def create_center(payload: schemas.CenterCreate, db: Session = Depends(get_db)):
 
 
 @app.get("/centers", response_model=list[schemas.CenterOut], dependencies=[Depends(require_auth)])
-def list_centers(tag: str | None = None, db: Session = Depends(get_db)):
+def list_centers(tag: str | None = None, q: str | None = None, db: Session = Depends(get_db)):
     query = db.query(models.Center)
     if tag:
         query = query.filter(models.Center.tag == tag)
-    return query.all()
+    if q:
+        search = f"%{q}%"
+        query = query.filter(
+            models.Center.name.ilike(search)
+            | models.Center.location.ilike(search)
+            | models.Center.fortigate_ip.ilike(search)
+        )
+    return query.order_by(models.Center.name).all()
 
 
 @app.get("/centers/{center_id}", response_model=schemas.CenterOut, dependencies=[Depends(require_auth)])

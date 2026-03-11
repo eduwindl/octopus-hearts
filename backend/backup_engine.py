@@ -36,6 +36,14 @@ def run_backup_for_center(db: Session, center: models.Center) -> models.Backup |
         center.last_backup = datetime.now(timezone.utc)
         center.status = "OK"
         db.add(center)
+
+        # Log success event
+        event = models.Event(
+            center_id=center.id,
+            event_type="BACKUP_OK",
+            message=f"Backup completed: {checksum[:16]}… ({size} bytes)",
+        )
+        db.add(event)
         db.commit()
 
         removed = enforce_retention(center.name)

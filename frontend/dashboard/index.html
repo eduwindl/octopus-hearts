@@ -165,6 +165,7 @@
 ║  ◆ CENTERS · FortiGate Fleet         ║
 ╚══════════════════════════════════════╝</pre>
           <div class="header-actions">
+            <input id="centerSearch" type="text" class="search-input" placeholder="🔍 Search name, location, IP..." oninput="debouncedSearch()" />
             <select id="tagFilterCenters" class="select-term" onchange="loadCenters()">
               <option value="">▸ All Tags</option>
               <option value="minerd">▸ MINERD</option>
@@ -176,7 +177,7 @@
             <button class="btn-term" onclick="toggleAddForm()">+ ADD FORTIGATE</button>
           </div>
         </div>
-        <p class="term-hint">💡 Right-click any row to edit, backup, or delete</p>
+        <p class="term-hint">💡 Right-click any row to edit, backup, or delete · Type to search by name, location, or IP</p>
 
         <!-- ADD CENTER FORM -->
         <div id="addCenterForm" class="term-card form-card collapsed">
