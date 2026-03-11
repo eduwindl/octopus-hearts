@@ -11,7 +11,7 @@ def verify_password(password: str, password_hash: str) -> bool:
     return pbkdf2_sha256.verify(password, password_hash)
 
 
-def ensure_admin_user(db: Session, username: str, password: str) -> models.User:
+def ensure_admin_user(db: Session, username: str = "admin", password: str = "changeme") -> models.User:
     existing = db.query(models.User).first()
     if existing:
         return existing

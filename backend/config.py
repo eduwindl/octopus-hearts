@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     scheduler_timezone: str = "America/Santo_Domingo"
     scheduler_enabled: bool = True
+    auth_enabled: bool = True
 
     smtp_host: str | None = None
     smtp_port: int = 587
