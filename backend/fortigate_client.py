@@ -177,10 +177,33 @@ def _download_backup(session: requests.Session, base_url: str, csrf_token: str |
                 continue
 
         except requests.exceptions.Timeout:
-            last_error = "Tiempo de espera agotado (Timeout). Verifique si la IP y el PUERTO son correctos."
+            last_error = "Timeout"
             continue
         except requests.exceptions.RequestException as e:
             last_error = str(e)
+            continue
+
+    # ── POST attempts (how FortiGate web UI does it) ──
+    post_attempts = [
+        {"destination": "file", "scope": "global"},
+        {"destination": "file"},
+        {},
+    ]
+    for body in post_attempts:
+        try:
+            response = session.post(
+                f"{base_url}{BACKUP_ENDPOINT}",
+                json=body,
+                headers=headers,
+                timeout=settings.fortigate_timeout_seconds,
+            )
+            last_response = response
+            if response.ok and _is_valid_config(response.content):
+                return response.content
+            if response.status_code == 424:
+                error_424_body = response.text[:200].strip()
+                continue
+        except Exception:
             continue
 
     # All scope attempts failed
@@ -210,11 +233,7 @@ def _download_backup(session: requests.Session, base_url: str, csrf_token: str |
 
 
 def _download_config_cmdb(session: requests.Session, base_url: str, csrf_token: str | None) -> bytes:
-    """Download config by reading CMDB sections one by one.
-    
-    This is a fallback method for when the standard backup API returns 424.
-    It requires only read permissions, not full backup permissions.
-    """
+    """Download config by reading CMDB sections. Produces FortiOS-compatible CLI format."""
     headers = {}
     if csrf_token:
         headers["X-CSRFTOKEN"] = csrf_token
@@ -223,6 +242,10 @@ def _download_config_cmdb(session: requests.Session, base_url: str, csrf_token: 
     config_lines = []
     
     # Get device info for the header
+    serial = "UNKNOWN"
+    version = "unknown"
+    build = "0"
+    hostname = "FortiGate"
     try:
         status_resp = session.get(
             f"{base_url}/api/v2/monitor/system/status",
@@ -231,55 +254,73 @@ def _download_config_cmdb(session: requests.Session, base_url: str, csrf_token: 
         )
         if status_resp.ok:
             info = status_resp.json().get("results", status_resp.json())
-            serial = info.get("serial", "UNKNOWN")
-            version = info.get("version", "unknown")
-            build = info.get("build", "0")
-            hostname = info.get("hostname", "FortiGate")
-            config_lines.append(f"#config-version={serial}-{version}-FW-build{build}:opmode=0:vdom=0")
-            config_lines.append(f"#conf_file_ver={build}")
-            config_lines.append(f"# hostname: {hostname}")
-            config_lines.append(f"# serial: {serial}")
-            config_lines.append(f"# CMDB backup via API (read-only method)")
-            config_lines.append("")
+            serial = info.get("serial", serial)
+            version = info.get("version", version)
+            build = str(info.get("build", build))
+            hostname = info.get("hostname", hostname)
     except Exception:
-        config_lines.append("#config-version=CMDB-BACKUP")
-        config_lines.append("")
+        pass
     
-    # Key CMDB sections to read (most important first)
+    # FortiOS-compatible header
+    config_lines.append(f"#config-version={serial}-{version}-FW-build{build}:opmode=0:vdom=0")
+    config_lines.append(f"#conf_file_ver={build}")
+    config_lines.append(f"#buildno={build}")
+    config_lines.append(f"#global_vdom=1")
+    config_lines.append("")
+    
+    def _render_value(val):
+        """Format a value for FortiOS config syntax."""
+        if isinstance(val, bool):
+            return "enable" if val else "disable"
+        if isinstance(val, str):
+            if " " in val or not val:
+                return f'"{val}"'
+            return val
+        return str(val)
+    
+    def _render_entry(entry, indent=1):
+        """Recursively render a config entry."""
+        lines = []
+        prefix = "    " * indent
+        for key, value in entry.items():
+            if key in ("q_origin_key", "datasource", "css-class"):
+                continue
+            if isinstance(value, list):
+                if len(value) > 0 and isinstance(value[0], dict):
+                    # Nested config table
+                    lines.append(f"{prefix}config {key}")
+                    for sub_entry in value:
+                        sub_name = sub_entry.get("name", sub_entry.get("id", sub_entry.get("mkey", "")))
+                        if sub_name:
+                            lines.append(f"{prefix}    edit \"{sub_name}\"")
+                        else:
+                            lines.append(f"{prefix}    edit 0")
+                        lines.extend(_render_entry(sub_entry, indent + 2))
+                        lines.append(f"{prefix}    next")
+                    lines.append(f"{prefix}end")
+                elif len(value) > 0:
+                    # Simple list (e.g., set srcintf "port1" "port2")
+                    items = " ".join([f'"{v}"' if isinstance(v, str) else str(v) for v in value])
+                    lines.append(f"{prefix}set {key} {items}")
+            elif isinstance(value, dict):
+                continue  # Skip complex nested objects at this level
+            elif key not in ("name", "id", "mkey"):
+                lines.append(f"{prefix}set {key} {_render_value(value)}")
+        return lines
+    
+    # Key CMDB sections to read
     cmdb_sections = [
-        "system/global",
-        "system/interface",
-        "system/dns",
-        "system/admin",
-        "system/ha",
-        "system/settings",
-        "system/zone",
-        "system/dhcp/server",
-        "system/sdwan",
-        "router/static",
-        "router/ospf",
-        "router/bgp",
-        "router/policy",
-        "firewall/address",
-        "firewall/addrgrp",
-        "firewall/service/custom",
-        "firewall/service/group",
-        "firewall/policy",
-        "firewall/vip",
-        "firewall/ippool",
-        "vpn.ipsec/phase1-interface",
-        "vpn.ipsec/phase2-interface",
-        "vpn.ssl/settings",
-        "user/local",
-        "user/group",
-        "user/ldap",
-        "user/radius",
-        "log/syslogd/setting",
-        "log/fortianalyzer/setting",
-        "system/ntp",
-        "system/snmp/community",
-        "system/automation-trigger",
-        "system/automation-action",
+        "system/global", "system/interface", "system/dns", "system/admin",
+        "system/ha", "system/settings", "system/zone", "system/dhcp/server",
+        "system/sdwan", "router/static", "router/ospf", "router/bgp",
+        "router/policy", "firewall/address", "firewall/addrgrp",
+        "firewall/service/custom", "firewall/service/group",
+        "firewall/policy", "firewall/vip", "firewall/ippool",
+        "vpn.ipsec/phase1-interface", "vpn.ipsec/phase2-interface",
+        "vpn.ssl/settings", "user/local", "user/group", "user/ldap",
+        "user/radius", "log/syslogd/setting", "log/fortianalyzer/setting",
+        "system/ntp", "system/snmp/community",
+        "system/automation-trigger", "system/automation-action",
         "system/automation-stitch",
     ]
     
@@ -291,39 +332,32 @@ def _download_config_cmdb(session: requests.Session, base_url: str, csrf_token: 
                 headers=headers,
                 timeout=timeout,
             )
-            if resp.ok:
-                data = resp.json()
-                results = data.get("results", [])
+            if not resp.ok:
+                continue
                 
-                # Build a config-like representation
-                section_name = section.replace("/", " ")
-                if isinstance(results, list) and len(results) > 0:
-                    config_lines.append(f"config {section_name}")
-                    for entry in results:
-                        if isinstance(entry, dict):
-                            name = entry.get("name", entry.get("id", entry.get("mkey", "")))
-                            if name:
-                                config_lines.append(f"    edit \"{name}\"")
-                            for key, value in entry.items():
-                                if key in ("name", "id", "mkey", "q_origin_key"):
-                                    continue
-                                if isinstance(value, (list, dict)):
-                                    continue
-                                config_lines.append(f"        set {key} {value}")
-                            if name:
-                                config_lines.append("    next")
-                    config_lines.append("end")
-                    config_lines.append("")
-                    sections_read += 1
-                elif isinstance(results, dict) and len(results) > 0:
-                    config_lines.append(f"config {section_name}")
-                    for key, value in results.items():
-                        if isinstance(value, (list, dict)):
-                            continue
-                        config_lines.append(f"    set {key} {value}")
-                    config_lines.append("end")
-                    config_lines.append("")
-                    sections_read += 1
+            data = resp.json()
+            results = data.get("results", [])
+            section_name = section.replace("/", " ")
+            
+            if isinstance(results, list) and len(results) > 0:
+                config_lines.append(f"config {section_name}")
+                for entry in results:
+                    if not isinstance(entry, dict):
+                        continue
+                    name = entry.get("name", entry.get("id", entry.get("mkey", "")))
+                    if name:
+                        config_lines.append(f'    edit "{name}"')
+                    else:
+                        config_lines.append("    edit 0")
+                    config_lines.extend(_render_entry(entry))
+                    config_lines.append("    next")
+                config_lines.append("end")
+                sections_read += 1
+            elif isinstance(results, dict) and len(results) > 0:
+                config_lines.append(f"config {section_name}")
+                config_lines.extend(_render_entry(results))
+                config_lines.append("end")
+                sections_read += 1
         except Exception:
             continue
     
