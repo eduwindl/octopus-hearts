@@ -139,14 +139,21 @@ def _download_backup(session: requests.Session, base_url: str, csrf_token: str |
     if csrf_token:
         headers["X-CSRFTOKEN"] = csrf_token
 
+    # Aggressive list of parameter combinations to try
     scope_attempts = [
         {"scope": "global", "destination": "file"},
         {"scope": "vdom", "vdom": "root", "destination": "file"},
         {"destination": "file"},
+        {},  # Completely naked request (no params at all)
+        {"scope": "global"},
+        {"scope": "vdom", "vdom": "root"},
+        {"mkey": "system"},
     ]
 
     last_response = None
     last_error = ""
+    error_424_body = ""
+    
     for params in scope_attempts:
         try:
             response = session.get(
@@ -164,22 +171,9 @@ def _download_backup(session: requests.Session, base_url: str, csrf_token: str |
                 last_error = f"Respuesta inválida (no es una config): {details}"
                 continue
             
-            # If server explicitly says 424, it often means the VDOM/scope is not applicable
             if response.status_code == 424:
-                # Let's try one last time WITHOUT any scope/vdom params
-                try:
-                    retry_params = {"source": "running"}
-                    response2 = session.get(
-                        f"{base_url}{BACKUP_ENDPOINT}",
-                        params=retry_params,
-                        headers=headers,
-                        timeout=settings.fortigate_timeout_seconds,
-                    )
-                    if response2.ok and _is_valid_config(response2.content):
-                        return response2.content
-                except Exception:
-                    pass
-                last_error = f"Error 424: El FortiGate rechazó la solicitud de backup (posible conflicto de VDOM)."
+                error_424_body = response.text[:200].strip()
+                last_error = f"Error 424 (params={params}): {error_424_body}"
                 continue
 
         except requests.exceptions.Timeout:
@@ -198,7 +192,11 @@ def _download_backup(session: requests.Session, base_url: str, csrf_token: str |
                 f"para descargar backups (requiere Super_Admin o permiso de lectura en System Config)."
             )
         if status == 424:
-            raise ConnectionError(f"Error 424: El FortiGate rechazó la solicitud de backup (posible conflicto de VDOM).")
+            raise ConnectionError(
+                f"Error 424: El FortiGate rechazó TODAS las combinaciones de backup. "
+                f"Respuesta del equipo: {error_424_body or 'sin detalle'}. "
+                f"El usuario posiblemente no tiene permiso para descargar configuraciones."
+            )
         raise ConnectionError(f"Error al descargar backup: HTTP {status}")
     
     # No response at all (all requests threw exceptions)
