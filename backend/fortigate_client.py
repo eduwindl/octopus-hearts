@@ -209,6 +209,133 @@ def _download_backup(session: requests.Session, base_url: str, csrf_token: str |
     raise ConnectionError(err_msg)
 
 
+def _download_config_cmdb(session: requests.Session, base_url: str, csrf_token: str | None) -> bytes:
+    """Download config by reading CMDB sections one by one.
+    
+    This is a fallback method for when the standard backup API returns 424.
+    It requires only read permissions, not full backup permissions.
+    """
+    headers = {}
+    if csrf_token:
+        headers["X-CSRFTOKEN"] = csrf_token
+    
+    timeout = settings.fortigate_timeout_seconds
+    config_lines = []
+    
+    # Get device info for the header
+    try:
+        status_resp = session.get(
+            f"{base_url}/api/v2/monitor/system/status",
+            headers=headers,
+            timeout=timeout,
+        )
+        if status_resp.ok:
+            info = status_resp.json().get("results", status_resp.json())
+            serial = info.get("serial", "UNKNOWN")
+            version = info.get("version", "unknown")
+            build = info.get("build", "0")
+            hostname = info.get("hostname", "FortiGate")
+            config_lines.append(f"#config-version={serial}-{version}-FW-build{build}:opmode=0:vdom=0")
+            config_lines.append(f"#conf_file_ver={build}")
+            config_lines.append(f"# hostname: {hostname}")
+            config_lines.append(f"# serial: {serial}")
+            config_lines.append(f"# CMDB backup via API (read-only method)")
+            config_lines.append("")
+    except Exception:
+        config_lines.append("#config-version=CMDB-BACKUP")
+        config_lines.append("")
+    
+    # Key CMDB sections to read (most important first)
+    cmdb_sections = [
+        "system/global",
+        "system/interface",
+        "system/dns",
+        "system/admin",
+        "system/ha",
+        "system/settings",
+        "system/zone",
+        "system/dhcp/server",
+        "system/sdwan",
+        "router/static",
+        "router/ospf",
+        "router/bgp",
+        "router/policy",
+        "firewall/address",
+        "firewall/addrgrp",
+        "firewall/service/custom",
+        "firewall/service/group",
+        "firewall/policy",
+        "firewall/vip",
+        "firewall/ippool",
+        "vpn.ipsec/phase1-interface",
+        "vpn.ipsec/phase2-interface",
+        "vpn.ssl/settings",
+        "user/local",
+        "user/group",
+        "user/ldap",
+        "user/radius",
+        "log/syslogd/setting",
+        "log/fortianalyzer/setting",
+        "system/ntp",
+        "system/snmp/community",
+        "system/automation-trigger",
+        "system/automation-action",
+        "system/automation-stitch",
+    ]
+    
+    sections_read = 0
+    for section in cmdb_sections:
+        try:
+            resp = session.get(
+                f"{base_url}/api/v2/cmdb/{section}",
+                headers=headers,
+                timeout=timeout,
+            )
+            if resp.ok:
+                data = resp.json()
+                results = data.get("results", [])
+                
+                # Build a config-like representation
+                section_name = section.replace("/", " ")
+                if isinstance(results, list) and len(results) > 0:
+                    config_lines.append(f"config {section_name}")
+                    for entry in results:
+                        if isinstance(entry, dict):
+                            name = entry.get("name", entry.get("id", entry.get("mkey", "")))
+                            if name:
+                                config_lines.append(f"    edit \"{name}\"")
+                            for key, value in entry.items():
+                                if key in ("name", "id", "mkey", "q_origin_key"):
+                                    continue
+                                if isinstance(value, (list, dict)):
+                                    continue
+                                config_lines.append(f"        set {key} {value}")
+                            if name:
+                                config_lines.append("    next")
+                    config_lines.append("end")
+                    config_lines.append("")
+                    sections_read += 1
+                elif isinstance(results, dict) and len(results) > 0:
+                    config_lines.append(f"config {section_name}")
+                    for key, value in results.items():
+                        if isinstance(value, (list, dict)):
+                            continue
+                        config_lines.append(f"    set {key} {value}")
+                    config_lines.append("end")
+                    config_lines.append("")
+                    sections_read += 1
+        except Exception:
+            continue
+    
+    if sections_read == 0:
+        raise ConnectionError("No se pudo leer ninguna sección de la configuración vía CMDB.")
+    
+    config_text = "\n".join(config_lines)
+    config_bytes = config_text.encode("utf-8")
+    
+    return config_bytes
+
+
 def fetch_config(fortigate_ip: str, api_token: str) -> bytes:
     """Fetch config using API token authentication."""
     url = f"https://{fortigate_ip}{BACKUP_ENDPOINT}"
@@ -283,7 +410,18 @@ def fetch_config_with_credentials(fortigate_ip: str, username: str, password: st
             session.verify = settings.fortigate_verify_ssl
             
             csrf_token = _try_login(session, base_url, username, password)
-            content = _download_backup(session, base_url, csrf_token)
+            
+            try:
+                content = _download_backup(session, base_url, csrf_token)
+            except ConnectionError as backup_err:
+                # If backup endpoint failed with 424, try CMDB method
+                if "424" in str(backup_err):
+                    try:
+                        content = _download_config_cmdb(session, base_url, csrf_token)
+                    except Exception as cmdb_err:
+                        raise ConnectionError(f"Backup API: {backup_err}. CMDB fallback: {cmdb_err}")
+                else:
+                    raise
             
             # Clean logout
             try:
