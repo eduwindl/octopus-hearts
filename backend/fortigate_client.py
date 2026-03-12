@@ -165,7 +165,21 @@ def _download_backup(session: requests.Session, base_url: str, csrf_token: str |
                 continue
             
             # If server explicitly says 424, it often means the VDOM/scope is not applicable
-            if response.status_code == 424 and "scope" in params:
+            if response.status_code == 424:
+                # Let's try one last time WITHOUT any scope/vdom params
+                try:
+                    retry_params = {"source": "running"}
+                    response2 = session.get(
+                        f"{base_url}{BACKUP_ENDPOINT}",
+                        params=retry_params,
+                        headers=headers,
+                        timeout=settings.fortigate_timeout_seconds,
+                    )
+                    if response2.ok and _is_valid_config(response2.content):
+                        return response2.content
+                except Exception:
+                    pass
+                last_error = f"Error 424: El FortiGate rechazó la solicitud de backup (posible conflicto de VDOM)."
                 continue
 
         except requests.exceptions.Timeout:
@@ -439,7 +453,7 @@ def _download_backup_cli(host_with_port: str, username: str, password: str) -> b
         if _is_valid_config(config_data):
             return config_data
             
-        sample = config_data.decode("utf-8", errors="ignore")[:200].replace("\n", " ").strip()
+        sample = config_data.decode("utf-8", errors="ignore")[:500].replace("\n", " ").strip()
         raise ConnectionError(f"CLI no devolvió una config válida. Recibido: [{sample}]")
 
     except Exception as e:
