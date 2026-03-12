@@ -10,6 +10,16 @@ LOGIN_ENDPOINT_V2 = "/api/v2/authentication"
 LOGOUT_ENDPOINT = "/logout"
 
 
+def _is_valid_config(content: bytes) -> bool:
+    """Check if the content looks like a real FortiGate configuration file."""
+    if len(content) < 500:
+        return False
+    
+    text = content.decode("utf-8", errors="ignore")
+    markers = ["#config-version", "#FortiGate", "config system global", "config global"]
+    return any(marker in text for marker in markers)
+
+
 def _try_login(session: requests.Session, base_url: str, username: str, password: str) -> str | None:
     """Attempt login using multiple methods. Returns CSRF token on success, raises on failure.
     
@@ -83,13 +93,16 @@ def _try_login(session: requests.Session, base_url: str, username: str, password
                 has_auth_cookie = True
 
         if response_text.startswith("1") or has_auth_cookie:
-            return csrf_token
+            if "Unknown action" in response_text or "error" in response_text.lower():
+                details.append(f"V1: Login falso positivo ({response_text[:20]})")
+            else:
+                return csrf_token
 
         # Explicit failure codes
-        if response_text == "0":
+        if response_text == "0" or "Unknown action" in response_text:
             raise ConnectionError(
-                f"Credenciales inválidas para {base_url}. "
-                f"El usuario '{username}' o la contraseña son incorrectos en este FortiGate."
+                f"Credenciales inválidas o sesión bloqueada en {base_url}. "
+                f"El FortiGate respondió: '{response_text[:30]}'."
             )
         
         if "<html" in response_text.lower():
@@ -132,8 +145,13 @@ def _download_backup(session: requests.Session, base_url: str, csrf_token: str |
                 timeout=settings.fortigate_timeout_seconds,
             )
             last_response = response
-            if response.ok and len(response.content) > 50:
+            if response.ok and _is_valid_config(response.content):
                 return response.content
+            
+            if response.ok and not _is_valid_config(response.content):
+                details = response.text[:100].strip()
+                last_error = f"Respuesta inválida (no es una config): {details}"
+                continue
             
             # If server explicitly says 424, it often means the VDOM/scope is not applicable
             if response.status_code == 424 and "scope" in params:
@@ -350,30 +368,31 @@ def _download_backup_cli(host_with_port: str, username: str, password: str) -> b
                 chunk = shell.recv(65535).decode("utf-8", errors="ignore")
                 output += chunk
                 # If we see a prompt at the end of the output and we have significant data
-                if (output.strip().endswith("#") or output.strip().endswith("$")) and "config system global" in output:
+                if (output.strip().endswith("#") or output.strip().endswith("$")) and ("config system global" in output or "config global" in output):
                     break
             time.sleep(0.5)
             
         ssh.close()
         
-        # Clean up output: find the part between 'show full-configuration' and the final prompt
+        # Clean up output
+        config_data = output.encode("utf-8")
         try:
-            # We look for the marker. Sometimes it's echoed back.
             marker = "show full-configuration"
             if marker in output:
                 config_part = output.split(marker, 1)[1]
-                # Lines until the next prompt
                 config_lines = []
                 for line in config_part.splitlines():
-                    # If this line looks like a prompt, we stop
                     if (line.strip().endswith("#") or line.strip().endswith("$")) and len(line) < 50:
                         break
                     config_lines.append(line)
-                return "\n".join(config_lines).strip().encode("utf-8")
+                config_data = "\n".join(config_lines).strip().encode("utf-8")
         except Exception:
             pass
+
+        if _is_valid_config(config_data):
+            return config_data
             
-        return output.encode("utf-8") # Fallback to raw output
+        raise ConnectionError("La salida de la CLI no contiene una configuración válida.")
 
     except Exception as e:
         raise ConnectionError(f"Fallo en CLI/SSH: {str(e)}")
