@@ -17,7 +17,7 @@ def _try_login(session: requests.Session, base_url: str, username: str, password
     3. If both fail, raise ConnectionError with clear message
     """
     timeout = settings.fortigate_timeout_seconds
-
+    details = []
     # ── Method 1: FortiOS 7.4+ JSON API login ──
     try:
         r1 = session.post(
@@ -25,6 +25,7 @@ def _try_login(session: requests.Session, base_url: str, username: str, password
             json={"username": username, "secretkey": password},
             timeout=timeout,
         )
+        details.append(f"V2: HTTP {r1.status_code}")
         if r1.status_code == 200:
             body = r1.json() if r1.headers.get("content-type", "").startswith("application/json") else {}
             status_msg = body.get("status_message", "")
@@ -45,10 +46,12 @@ def _try_login(session: requests.Session, base_url: str, username: str, password
                     f"Credenciales inválidas para {base_url}. "
                     f"El usuario '{username}' o la contraseña son incorrectos en este FortiGate."
                 )
+            details.append(f"V2 Body: {str(body)[:100]}")
     except ConnectionError:
         raise
-    except Exception:
-        pass  # Method 1 not available, fall through to Method 2
+    except Exception as e:
+        details.append(f"V2 Error: {str(e)}")
+        pass
 
     # ── Method 2: Legacy /logincheck (FortiOS 6.x / 7.0-7.2) ──
     try:
@@ -63,6 +66,7 @@ def _try_login(session: requests.Session, base_url: str, username: str, password
             timeout=timeout,
         )
         response_text = r2.text.strip()
+        details.append(f"V1: HTTP {r2.status_code}")
 
         cookies = session.cookies.get_dict()
         csrf_token = None
@@ -85,15 +89,21 @@ def _try_login(session: requests.Session, base_url: str, username: str, password
                 f"Credenciales inválidas para {base_url}. "
                 f"El usuario '{username}' o la contraseña son incorrectos en este FortiGate."
             )
+        
+        if "<html" in response_text.lower():
+            details.append("V1: Recibió HTML (posible Disclaimer o Bloqueo)")
+        else:
+            details.append(f"V1 Body: {response_text[:50]}")
     except ConnectionError:
         raise
-    except Exception:
+    except Exception as e:
+        details.append(f"V1 Error: {str(e)}")
         pass
 
     # ── Both methods failed ──
     raise ConnectionError(
-        f"No se pudo iniciar sesión en {base_url} con el usuario '{username}'. "
-        f"Verifique que las credenciales sean correctas y que el acceso API esté habilitado en el FortiGate."
+        f"No se pudo iniciar sesión en {base_url} con el usuario '{username}'.\n"
+        f"Detalles técnicos: {', '.join(details)}"
     )
 
 
