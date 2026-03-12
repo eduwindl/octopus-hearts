@@ -120,7 +120,7 @@ def _download_backup(session: requests.Session, base_url: str, csrf_token: str |
     ]
 
     last_response = None
-    last_error = None
+    last_error = ""
     for params in scope_attempts:
         try:
             response = session.get(
@@ -132,6 +132,14 @@ def _download_backup(session: requests.Session, base_url: str, csrf_token: str |
             last_response = response
             if response.ok and len(response.content) > 50:
                 return response.content
+            
+            # If server explicitly says 424, it often means the VDOM/scope is not applicable
+            if response.status_code == 424 and "scope" in params:
+                continue
+
+        except requests.exceptions.Timeout:
+            last_error = "Tiempo de espera agotado (Timeout). Verifique si la IP y el PUERTO son correctos."
+            continue
         except requests.exceptions.RequestException as e:
             last_error = str(e)
             continue
@@ -142,16 +150,20 @@ def _download_backup(session: requests.Session, base_url: str, csrf_token: str |
         if status in (401, 403):
             raise ConnectionError(
                 f"Permiso denegado ({status}). El usuario no tiene privilegios suficientes "
-                f"para descargar backups. Se necesita perfil 'Super_Admin' o permisos de lectura "
-                f"sobre 'System Configuration' en el FortiGate."
+                f"para descargar backups (requiere Super_Admin o permiso de lectura en System Config)."
             )
+        if status == 424:
+            raise ConnectionError(f"Error 424: El FortiGate rechazó la solicitud de backup (posible conflicto de VDOM).")
         raise ConnectionError(f"Error al descargar backup: HTTP {status}")
     
     # No response at all (all requests threw exceptions)
-    raise ConnectionError(
-        f"No se pudo conectar al FortiGate en {base_url} para descargar el backup. "
-        f"{'Detalle: ' + last_error if last_error else 'Verifique la conectividad de red.'}"
-    )
+    err_msg = f"No se pudo conectar al FortiGate en {base_url}. "
+    if "10443" in base_url:
+        err_msg += "Verifique si el puerto 10443 es correcto para este equipo o pruebe con el 443."
+    else:
+        err_msg += f"Detalle Técnico: {last_error}"
+    
+    raise ConnectionError(err_msg)
 
 
 def fetch_config(fortigate_ip: str, api_token: str) -> bytes:
