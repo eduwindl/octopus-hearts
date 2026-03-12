@@ -279,10 +279,6 @@ def _download_config_cmdb(session: requests.Session, base_url: str, csrf_token: 
     
     # FortiOS-compatible header
     config_lines.append(f"#config-version={serial}-{version_clean}-FW-build{build}:opmode=0:vdom=0")
-    config_lines.append("#conf_file_ver=0")
-    config_lines.append(f"#buildno={build}")
-    config_lines.append("#global_vdom=1")
-    config_lines.append("")
     config_lines.append(f"#conf_file_ver={build}")
     config_lines.append(f"#buildno={build}")
     config_lines.append(f"#global_vdom=1")
