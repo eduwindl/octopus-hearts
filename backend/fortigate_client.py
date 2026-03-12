@@ -357,29 +357,43 @@ def _download_backup_cli(host_with_port: str, username: str, password: str) -> b
             allow_agent=False
         )
         
-        # Disable paging and capture full config
-        # We use a shell session to ensure commands are executed in sequence
+        # 1. Start session shell
         shell = ssh.invoke_shell()
         shell.settimeout(20)
         
-        # Give it a second to initialize
-        time.sleep(1)
+        # 2. Clear banners/disclaimers (Send multiple Enter)
+        for _ in range(3):
+            shell.send("\n")
+            time.sleep(0.5)
+        
+        # 3. Disable paging
         shell.send("config system console\n")
         shell.send("set output standard\n")
         shell.send("end\n")
+        time.sleep(1)
+        
+        # 4. Try standard backup command
         shell.send("show full-configuration\n")
         
-        # Read output in chunks until we see the prompt again
+        # Read output in chunks
         output = ""
         start_time = time.time()
-        max_time = settings.fortigate_timeout_seconds + 120 # Give enough time for large configs
+        max_time = settings.fortigate_timeout_seconds + 120
         
         while time.time() - start_time < max_time:
             if shell.recv_ready():
                 chunk = shell.recv(65535).decode("utf-8", errors="ignore")
                 output += chunk
-                # If we see a prompt at the end of the output and we have significant data
-                if (output.strip().endswith("#") or output.strip().endswith("$")) and ("config system global" in output or "config global" in output):
+                
+                # Check for "Command fail" or "Unknown action" to try 'config global'
+                if ("Unknown action" in output or "Command fail" in output) and "config global" not in output:
+                    shell.send("config global\n")
+                    shell.send("show full-configuration\n")
+                    # Clear output to start fresh with global config
+                    output = ""
+                    continue
+
+                if (output.strip().endswith("#") or output.strip().endswith("$")) and ("config system " in output or "config global" in output):
                     break
             time.sleep(0.5)
             
@@ -388,9 +402,16 @@ def _download_backup_cli(host_with_port: str, username: str, password: str) -> b
         # Clean up output
         config_data = output.encode("utf-8")
         try:
-            marker = "show full-configuration"
-            if marker in output:
-                config_part = output.split(marker, 1)[1]
+            # Look for the last 'show full-configuration' or 'config global' to find the start
+            markers = ["show full-configuration", "config global"]
+            start_pos = -1
+            for m in markers:
+                pos = output.rfind(m)
+                if pos > start_pos:
+                    start_pos = pos + len(m)
+            
+            if start_pos != -1:
+                config_part = output[start_pos:]
                 config_lines = []
                 for line in config_part.splitlines():
                     if (line.strip().endswith("#") or line.strip().endswith("$")) and len(line) < 50:
@@ -403,9 +424,8 @@ def _download_backup_cli(host_with_port: str, username: str, password: str) -> b
         if _is_valid_config(config_data):
             return config_data
             
-        # If invalid, provide a snippet of the output to diagnose
-        sample = config_data.decode("utf-8", errors="ignore")[:150].replace("\n", " ")
-        raise ConnectionError(f"CLI no devolvió una config válida. Recibido: [{sample}...]")
+        sample = config_data.decode("utf-8", errors="ignore")[:200].replace("\n", " ").strip()
+        raise ConnectionError(f"CLI no devolvió una config válida. Recibido: [{sample}]")
 
     except Exception as e:
         raise ConnectionError(f"Fallo en CLI/SSH: {str(e)}")
