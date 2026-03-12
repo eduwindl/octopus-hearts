@@ -1,4 +1,6 @@
 import requests
+import paramiko
+import time
 from backend.config import settings
 
 
@@ -212,25 +214,36 @@ def fetch_config(fortigate_ip: str, api_token: str) -> bytes:
 
 
 def fetch_config_with_credentials(fortigate_ip: str, username: str, password: str) -> bytes:
-    """Fetch config using session-based username/password authentication."""
-    base_url = f"https://{fortigate_ip}"
-    session = requests.Session()
-    session.verify = settings.fortigate_verify_ssl
-
-    # Step 1: Login (tries v2 JSON API first, then legacy /logincheck)
-    csrf_token = _try_login(session, base_url, username, password)
-
-    # Step 2: Download backup (tries global, then vdom, then no-scope)
-    content = _download_backup(session, base_url, csrf_token)
-
-    # Step 3: Logout cleanly
+    """Fetch config trying SSH CLI first, then falling back to REST API."""
+    errors = []
+    
+    # ── Attempt 1: SSH CLI (Preferred) ──
     try:
-        headers = {"X-CSRFTOKEN": csrf_token} if csrf_token else {}
-        session.post(f"{base_url}{LOGOUT_ENDPOINT}", data={"ajax": "1"}, headers=headers, timeout=5)
-    except Exception:
-        pass
+        return _download_backup_cli(fortigate_ip, username, password)
+    except Exception as e:
+        errors.append(f"CLI/SSH Error: {str(e)}")
 
-    return content
+    # ── Attempt 2: REST API (Fallback) ──
+    try:
+        base_url = f"https://{fortigate_ip}"
+        session = requests.Session()
+        session.verify = settings.fortigate_verify_ssl
+        
+        csrf_token = _try_login(session, base_url, username, password)
+        content = _download_backup(session, base_url, csrf_token)
+        
+        # Clean logout
+        try:
+            headers = {"X-CSRFTOKEN": csrf_token} if csrf_token else {}
+            session.post(f"{base_url}{LOGOUT_ENDPOINT}", data={"ajax": "1"}, headers=headers, timeout=5)
+        except Exception:
+            pass
+            
+        return content
+    except Exception as e:
+        errors.append(f"API Error: {str(e)}")
+
+    raise ConnectionError(f"No se pudo obtener el backup por ningún método:\n" + "\n".join(errors))
 
 
 def restore_config(fortigate_ip: str, api_token: str, content: bytes) -> None:
@@ -278,6 +291,76 @@ def restore_config(fortigate_ip: str, api_token: str, content: bytes) -> None:
         f"No se pudo conectar al FortiGate {fortigate_ip} para restaurar. "
         f"{'Detalle: ' + last_error if last_error else 'Verifique la conectividad.'}"
     )
+
+
+def _download_backup_cli(host_with_port: str, username: str, password: str) -> bytes:
+    """Download config using SSH CLI (show full-configuration)."""
+    # Extract IP only, SSH usually on port 22
+    host = host_with_port.split(":")[0] if ":" in host_with_port else host_with_port
+    
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    
+    try:
+        ssh.connect(
+            host, 
+            port=22, 
+            username=username, 
+            password=password, 
+            timeout=settings.fortigate_timeout_seconds,
+            look_for_keys=False,
+            allow_agent=False
+        )
+        
+        # Disable paging and capture full config
+        # We use a shell session to ensure commands are executed in sequence
+        shell = ssh.invoke_shell()
+        shell.settimeout(20)
+        
+        # Give it a second to initialize
+        time.sleep(1)
+        shell.send("config system console\n")
+        shell.send("set output standard\n")
+        shell.send("end\n")
+        shell.send("show full-configuration\n")
+        
+        # Read output in chunks until we see the prompt again
+        output = ""
+        start_time = time.time()
+        max_time = settings.fortigate_timeout_seconds + 120 # Give enough time for large configs
+        
+        while time.time() - start_time < max_time:
+            if shell.recv_ready():
+                chunk = shell.recv(65535).decode("utf-8", errors="ignore")
+                output += chunk
+                # If we see a prompt at the end of the output and we have significant data
+                if (output.strip().endswith("#") or output.strip().endswith("$")) and "config system global" in output:
+                    break
+            time.sleep(0.5)
+            
+        ssh.close()
+        
+        # Clean up output: find the part between 'show full-configuration' and the final prompt
+        try:
+            # We look for the marker. Sometimes it's echoed back.
+            marker = "show full-configuration"
+            if marker in output:
+                config_part = output.split(marker, 1)[1]
+                # Lines until the next prompt
+                config_lines = []
+                for line in config_part.splitlines():
+                    # If this line looks like a prompt, we stop
+                    if (line.strip().endswith("#") or line.strip().endswith("$")) and len(line) < 50:
+                        break
+                    config_lines.append(line)
+                return "\n".join(config_lines).strip().encode("utf-8")
+        except Exception:
+            pass
+            
+        return output.encode("utf-8") # Fallback to raw output
+
+    except Exception as e:
+        raise ConnectionError(f"Fallo en CLI/SSH: {str(e)}")
 
 
 def restore_config_with_credentials(fortigate_ip: str, username: str, password: str, content: bytes) -> None:
