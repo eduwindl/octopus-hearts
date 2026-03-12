@@ -692,6 +692,9 @@ def restore_config_with_credentials(fortigate_ip: str, username: str, password: 
         headers["X-CSRFTOKEN"] = csrf_token
 
     scope_attempts = [
+        {"scope": "global", "action": "restore", "destination": "file"},
+        {"scope": "vdom", "vdom": "root", "action": "restore", "destination": "file"},
+        {"action": "restore", "destination": "file"},
         {"scope": "global"},
         {"scope": "vdom", "vdom": "root"},
         {},
@@ -723,15 +726,90 @@ def restore_config_with_credentials(fortigate_ip: str, username: str, password: 
                 f"Permiso denegado ({status}). El usuario '{username}' no tiene privilegios "
                 f"suficientes para restaurar configuraciones."
             )
+        
+        # If API restore fails or gives 424, attempt SSH CLI restore snippet method
+        if status == 424 or status >= 400:
+            try:
+                _restore_backup_cli(fortigate_ip, username, password, content)
+                return
+            except Exception as cli_err:
+                raise ConnectionError(f"Error HTTP {status}. Intento CLI también falló: {cli_err}")
+                
         raise ConnectionError(f"Error al restaurar backup: HTTP {status}")
     elif last_response is None:
-        raise ConnectionError(
-            f"No se pudo conectar al FortiGate {base_url} para restaurar. "
-            f"{'Detalle: ' + last_error if last_error else 'Verifique la conectividad.'}"
-        )
+        try:
+            _restore_backup_cli(fortigate_ip, username, password, content)
+            return
+        except Exception as cli_err:
+             raise ConnectionError(
+                f"No se pudo conectar al FortiGate {base_url} para restaurar por API ni CLI. "
+                f"{'Detalle API: ' + last_error if last_error else 'Verifique la conectividad.'} - Detalle CLI: {cli_err}"
+            )
 
-    # Step 3: Logout cleanly
+def _restore_backup_cli(host_with_port: str, username: str, password: str, content: bytes) -> None:
+    """Restore config using SSH CLI by injecting script commands."""
+    host = host_with_port.split(":")[0] if ":" in host_with_port else host_with_port
+    
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    
     try:
-        session.post(f"{base_url}{LOGOUT_ENDPOINT}", data={"ajax": "1"}, headers=headers, timeout=5)
-    except Exception:
-        pass
+        ssh.connect(
+            host, 
+            port=22, 
+            username=username, 
+            password=password, 
+            timeout=settings.fortigate_timeout_seconds,
+            look_for_keys=False,
+            allow_agent=False
+        )
+        
+        # SFTP method is preferred for FortiGate script uploads
+        try:
+            sftp = ssh.open_sftp()
+            # Upload as a script file to execute
+            remote_path = "/tmp/restore.conf"
+            
+            with sftp.file(remote_path, "w") as f:
+                f.write(content)
+            sftp.close()
+            
+            # Execute the uploaded script
+            shell = ssh.invoke_shell()
+            shell.settimeout(20)
+            
+            for _ in range(3):
+                shell.send("\n")
+                time.sleep(0.5)
+            
+            shell.send(f"execute restore config flash {remote_path}\n")
+            time.sleep(1)
+            shell.send("y\n") # Confirm restore and reboot
+            
+            time.sleep(2)
+            ssh.close()
+            return
+            
+        except Exception:
+            # Fallback to direct CLI stream injection if SFTP fails
+            shell = ssh.invoke_shell()
+            shell.settimeout(30)
+            
+            for _ in range(3):
+                shell.send("\n")
+                time.sleep(0.5)
+                
+            # FortiGate has a limit on paste buffer, send line by line 
+            lines = content.decode("utf-8", errors="ignore").splitlines()
+            for line in lines:
+                if not line.strip() or line.startswith("#"):
+                    continue
+                shell.send(line + "\n")
+                time.sleep(0.05) # Small delay to prevent buffer overflow
+                
+            time.sleep(2)
+            ssh.close()
+            return
+
+    except Exception as e:
+        raise ConnectionError(f"{str(e)}")
