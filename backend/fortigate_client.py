@@ -33,10 +33,10 @@ def _try_login(session: requests.Session, base_url: str, username: str, password
             cookies = session.cookies.get_dict()
             csrf_token = None
             for name, value in cookies.items():
-                if "ccsrf" in name.lower() and value:
-                    csrf_token = value.strip('"')
+                if "ccsrf" in name.lower():
+                    csrf_token = value.strip('"') if value else None
             
-            if status_msg == "LOGIN_SUCCESS" or (csrf_token and body.get("status") == 0):
+            if status_msg == "LOGIN_SUCCESS" or body.get("status") == 0:
                 return csrf_token
             
             # Login explicitly failed
@@ -110,26 +110,38 @@ def _download_backup(session: requests.Session, base_url: str, csrf_token: str |
     ]
 
     last_response = None
+    last_error = None
     for params in scope_attempts:
-        response = session.get(
-            f"{base_url}{BACKUP_ENDPOINT}",
-            params=params,
-            headers=headers,
-            timeout=settings.fortigate_timeout_seconds,
-        )
-        last_response = response
-        if response.ok and len(response.content) > 50:
-            return response.content
+        try:
+            response = session.get(
+                f"{base_url}{BACKUP_ENDPOINT}",
+                params=params,
+                headers=headers,
+                timeout=settings.fortigate_timeout_seconds,
+            )
+            last_response = response
+            if response.ok and len(response.content) > 50:
+                return response.content
+        except requests.exceptions.RequestException as e:
+            last_error = str(e)
+            continue
 
     # All scope attempts failed
-    status = last_response.status_code if last_response else "N/A"
-    if status in (401, 403):
-        raise ConnectionError(
-            f"Permiso denegado ({status}). El usuario no tiene privilegios suficientes "
-            f"para descargar backups. Se necesita perfil 'Super_Admin' o permisos de lectura "
-            f"sobre 'System Configuration' en el FortiGate."
-        )
-    raise ConnectionError(f"Error al descargar backup: HTTP {status}")
+    if last_response is not None:
+        status = last_response.status_code
+        if status in (401, 403):
+            raise ConnectionError(
+                f"Permiso denegado ({status}). El usuario no tiene privilegios suficientes "
+                f"para descargar backups. Se necesita perfil 'Super_Admin' o permisos de lectura "
+                f"sobre 'System Configuration' en el FortiGate."
+            )
+        raise ConnectionError(f"Error al descargar backup: HTTP {status}")
+    
+    # No response at all (all requests threw exceptions)
+    raise ConnectionError(
+        f"No se pudo conectar al FortiGate en {base_url} para descargar el backup. "
+        f"{'Detalle: ' + last_error if last_error else 'Verifique la conectividad de red.'}"
+    )
 
 
 def fetch_config(fortigate_ip: str, api_token: str) -> bytes:
@@ -146,25 +158,35 @@ def fetch_config(fortigate_ip: str, api_token: str) -> bytes:
     ]
 
     last_response = None
+    last_error = None
     for params in scope_attempts:
-        response = requests.get(
-            url,
-            headers=headers,
-            params=params,
-            timeout=settings.fortigate_timeout_seconds,
-            verify=settings.fortigate_verify_ssl,
-        )
-        last_response = response
-        if response.ok and len(response.content) > 50:
-            return response.content
+        try:
+            response = requests.get(
+                url,
+                headers=headers,
+                params=params,
+                timeout=settings.fortigate_timeout_seconds,
+                verify=settings.fortigate_verify_ssl,
+            )
+            last_response = response
+            if response.ok and len(response.content) > 50:
+                return response.content
+        except requests.exceptions.RequestException as e:
+            last_error = str(e)
+            continue
 
-    status = last_response.status_code if last_response else "N/A"
-    if status in (401, 403):
-        raise ConnectionError(
-            f"Permiso denegado ({status}). El token API no tiene privilegios suficientes "
-            f"para descargar backups o el scope VDOM está restringido."
-        )
-    raise ConnectionError(f"Error al descargar backup con token: HTTP {status}")
+    if last_response is not None:
+        status = last_response.status_code
+        if status in (401, 403):
+            raise ConnectionError(
+                f"Permiso denegado ({status}). El token API no tiene privilegios suficientes "
+                f"para descargar backups o el scope VDOM está restringido."
+            )
+        raise ConnectionError(f"Error al descargar backup con token: HTTP {status}")
+    raise ConnectionError(
+        f"No se pudo conectar al FortiGate {fortigate_ip} para descargar el backup. "
+        f"{'Detalle: ' + last_error if last_error else 'Verifique la conectividad.'}"
+    )
 
 
 def fetch_config_with_credentials(fortigate_ip: str, username: str, password: str) -> bytes:
@@ -203,27 +225,37 @@ def restore_config(fortigate_ip: str, api_token: str, content: bytes) -> None:
     ]
 
     last_response = None
+    last_error = None
     for params in scope_attempts:
-        files = {"file": ("config.conf", content)}
-        response = requests.post(
-            url,
-            headers=headers,
-            params=params,
-            files=files,
-            timeout=settings.fortigate_timeout_seconds,
-            verify=settings.fortigate_verify_ssl,
-        )
-        last_response = response
-        if response.ok:
-            return
+        try:
+            files = {"file": ("config.conf", content)}
+            response = requests.post(
+                url,
+                headers=headers,
+                params=params,
+                files=files,
+                timeout=settings.fortigate_timeout_seconds,
+                verify=settings.fortigate_verify_ssl,
+            )
+            last_response = response
+            if response.ok:
+                return
+        except requests.exceptions.RequestException as e:
+            last_error = str(e)
+            continue
 
-    status = last_response.status_code if last_response else "N/A"
-    if status in (401, 403):
-        raise ConnectionError(
-            f"Permiso denegado ({status}). El token API no tiene privilegios suficientes "
-            f"para restaurar configuraciones."
-        )
-    raise ConnectionError(f"Error al restaurar backup con token: HTTP {status}")
+    if last_response is not None:
+        status = last_response.status_code
+        if status in (401, 403):
+            raise ConnectionError(
+                f"Permiso denegado ({status}). El token API no tiene privilegios suficientes "
+                f"para restaurar configuraciones."
+            )
+        raise ConnectionError(f"Error al restaurar backup con token: HTTP {status}")
+    raise ConnectionError(
+        f"No se pudo conectar al FortiGate {fortigate_ip} para restaurar. "
+        f"{'Detalle: ' + last_error if last_error else 'Verifique la conectividad.'}"
+    )
 
 
 def restore_config_with_credentials(fortigate_ip: str, username: str, password: str, content: bytes) -> None:
@@ -247,18 +279,23 @@ def restore_config_with_credentials(fortigate_ip: str, username: str, password: 
     ]
 
     last_response = None
+    last_error = None
     for params in scope_attempts:
-        files = {"file": ("config.conf", content)}
-        response = session.post(
-            f"{base_url}{settings.fortigate_restore_endpoint}",
-            headers=headers,
-            params=params,
-            files=files,
-            timeout=settings.fortigate_timeout_seconds,
-        )
-        last_response = response
-        if response.ok:
-            break
+        try:
+            files = {"file": ("config.conf", content)}
+            response = session.post(
+                f"{base_url}{settings.fortigate_restore_endpoint}",
+                headers=headers,
+                params=params,
+                files=files,
+                timeout=settings.fortigate_timeout_seconds,
+            )
+            last_response = response
+            if response.ok:
+                break
+        except requests.exceptions.RequestException as e:
+            last_error = str(e)
+            continue
 
     if last_response and not last_response.ok:
         status = last_response.status_code
@@ -268,6 +305,11 @@ def restore_config_with_credentials(fortigate_ip: str, username: str, password: 
                 f"suficientes para restaurar configuraciones."
             )
         raise ConnectionError(f"Error al restaurar backup: HTTP {status}")
+    elif last_response is None:
+        raise ConnectionError(
+            f"No se pudo conectar al FortiGate {base_url} para restaurar. "
+            f"{'Detalle: ' + last_error if last_error else 'Verifique la conectividad.'}"
+        )
 
     # Step 3: Logout cleanly
     try:
