@@ -450,21 +450,16 @@ def fetch_config(fortigate_ip: str, api_token: str) -> bytes:
 
 
 def fetch_config_with_credentials(fortigate_ip: str, username: str, password: str) -> bytes:
-    """Fetch config trying SSH CLI first, then falling back to REST API."""
+    """Fetch config trying REST API first, then falling back to SSH CLI."""
     errors = []
     
-    # ── Attempt 1: SSH CLI (Preferred) ──
-    try:
-        return _download_backup_cli(fortigate_ip, username, password)
-    except Exception as e:
-        errors.append(f"CLI/SSH Error: {str(e)}")
-
-    # ── Attempt 2: REST API (Primary Port) ──
+    # ── Attempt 1: REST API (Primary Port) ──
+    # The API is preferred over SSH CLI because it natively provides the strict
+    # FortiOS system header (#conf_file_ver, #global_vdom) required for restoration.
     ports_to_try = []
     if ":" in fortigate_ip:
         main_ip, main_port = fortigate_ip.split(":", 1)
         ports_to_try.append(main_port)
-        # If 10443 failed, always try 443 as fallback
         if main_port == "10443":
             ports_to_try.append("443")
     else:
@@ -501,11 +496,16 @@ def fetch_config_with_credentials(fortigate_ip: str, username: str, password: st
                 
             return content
         except Exception as e:
-            # If it's a "Connection Refused" and we have more ports to try, continue
             if "10061" in str(e) or "refused" in str(e).lower():
                 errors.append(f"API Port {port}: Connection Refused")
                 continue
             errors.append(f"API Port {port}: {str(e)}")
+
+    # ── Attempt 2: SSH CLI (Fallback) ──
+    try:
+        return _download_backup_cli(fortigate_ip, username, password)
+    except Exception as e:
+        errors.append(f"CLI/SSH Error: {str(e)}")
 
     raise ConnectionError(f"No se pudo obtener el backup por ningún método:\n" + "\n".join(errors))
 
@@ -668,6 +668,30 @@ def _download_backup_cli(host_with_port: str, username: str, password: str) -> b
             pass
 
         if _is_valid_config(config_data):
+            # Patch SSH terminal dump to include strict parameters for restoration
+            text = config_data.decode("utf-8", errors="ignore")
+            if "#conf_file_ver=" not in text:
+                header_lines = []
+                lines = text.split("\n")
+                if lines[0].startswith("#config-version="):
+                    header_lines.append(lines[0])
+                    header_lines.append("#conf_file_ver=577097575828080")
+                    # Intenta extraer el buildno original
+                    build = "0"
+                    if "build" in lines[0]:
+                        try:
+                            # FGT60F-7.4.11-FW-build2878 -> 2878
+                            build = lines[0].split("build")[1].split("-")[0].split(":")[0]
+                        except:
+                            pass
+                    if "#buildno=" not in text:
+                        header_lines.append(f"#buildno={build}")
+                    if "#global_vdom=" not in text:
+                        header_lines.append("#global_vdom=1")
+                    rest = lines[1:]
+                    text = "\n".join(header_lines + rest)
+                    config_data = text.encode("utf-8")
+                    
             return config_data
             
         sample = config_data.decode("utf-8", errors="ignore")[:500].replace("\n", " ").strip()
