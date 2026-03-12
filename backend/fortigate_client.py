@@ -30,6 +30,12 @@ def _try_login(session: requests.Session, base_url: str, username: str, password
     """
     timeout = settings.fortigate_timeout_seconds
     details = []
+
+    # 0. Initial GET to establish session/cookies (Critical for FortiOS 7.0+)
+    try:
+        session.get(base_url, timeout=timeout)
+    except Exception:
+        pass
     # ── Method 1: FortiOS 7.4+ JSON API login ──
     try:
         r1 = session.post(
@@ -100,9 +106,14 @@ def _try_login(session: requests.Session, base_url: str, username: str, password
 
         # Explicit failure codes
         if response_text == "0" or "Unknown action" in response_text:
+            header_hints = []
+            if "X-FGT-ERROR" in r2.headers:
+                header_hints.append(f"FGT-Error: {r2.headers['X-FGT-ERROR']}")
+            
+            hint_str = f" ({', '.join(header_hints)})" if header_hints else ""
             raise ConnectionError(
-                f"Credenciales inválidas o sesión bloqueada en {base_url}. "
-                f"El FortiGate respondió: '{response_text[:30]}'."
+                f"Credenciales inválidas o acceso bloqueado por 'Trusted Hosts' en {base_url}. "
+                f"Respuesta: '{response_text[:20]}'{hint_str}."
             )
         
         if "<html" in response_text.lower():
