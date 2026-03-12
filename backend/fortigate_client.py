@@ -141,12 +141,13 @@ def _download_backup(session: requests.Session, base_url: str, csrf_token: str |
 
     # Aggressive list of parameter combinations to try
     scope_attempts = [
+        {"scope": "global", "destination": "file", "action": "backup"},
+        {"scope": "vdom", "vdom": "root", "destination": "file", "action": "backup"},
+        {"destination": "file", "action": "backup"},
         {"scope": "global", "destination": "file"},
         {"scope": "vdom", "vdom": "root", "destination": "file"},
         {"destination": "file"},
         {},  # Completely naked request (no params at all)
-        {"scope": "global"},
-        {"scope": "vdom", "vdom": "root"},
         {"mkey": "system"},
     ]
 
@@ -185,6 +186,8 @@ def _download_backup(session: requests.Session, base_url: str, csrf_token: str |
 
     # ── POST attempts (how FortiGate web UI does it) ──
     post_attempts = [
+        {"action": "backup", "destination": "file", "scope": "global"},
+        {"action": "backup", "destination": "file", "scope": "vdom", "vdom": "root"},
         {"destination": "file", "scope": "global"},
         {"destination": "file"},
         {},
@@ -597,13 +600,23 @@ def _download_backup_cli(host_with_port: str, username: str, password: str) -> b
             shell.send("\n")
             time.sleep(0.5)
         
-        # 3. Disable paging
+        # Read intro banner to clear buffer
+        if shell.recv_ready():
+            shell.recv(65535)
+
+        # 3. Aggressively try to enter global mode and standard output
+        shell.send("config global\n")
+        time.sleep(0.5)
         shell.send("config system console\n")
         shell.send("set output standard\n")
         shell.send("end\n")
-        time.sleep(1)
+        time.sleep(0.5)
         
-        # 4. Try standard backup command
+        # 4. Clear buffer again
+        if shell.recv_ready():
+            shell.recv(65535)
+            
+        # 5. Try standard backup command
         shell.send("show full-configuration\n")
         
         # Read output in chunks
@@ -616,16 +629,18 @@ def _download_backup_cli(host_with_port: str, username: str, password: str) -> b
                 chunk = shell.recv(65535).decode("utf-8", errors="ignore")
                 output += chunk
                 
-                # Check for "Command fail" or "Unknown action" to try 'config global'
-                if ("Unknown action" in output or "Command fail" in output) and "config global" not in output:
-                    shell.send("config global\n")
-                    shell.send("show full-configuration\n")
-                    # Clear output to start fresh with global config
-                    output = ""
-                    continue
-
-                if (output.strip().endswith("#") or output.strip().endswith("$")) and ("config system " in output or "config global" in output):
-                    break
+                if (output.strip().endswith("#") or output.strip().endswith("$")):
+                    # Make sure we've captured a substantial amount of text before breaking, 
+                    # otherwise we might just be caught on an error prompt
+                    if len(output) > 1000:
+                        break
+                    elif "Unknown action 0" in output or "Command fail" in output:
+                        # If show full-configuration fails even under global, try without global
+                        if "vdom" not in output.lower():
+                            shell.send("end\n")
+                            shell.send("show full-configuration\n")
+                            output = ""
+                            continue
             time.sleep(0.5)
             
         ssh.close()
