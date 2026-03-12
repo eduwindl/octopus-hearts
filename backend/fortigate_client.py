@@ -70,12 +70,14 @@ def fetch_config_with_credentials(fortigate_ip: str, username: str, password: st
             has_auth_cookie = True
 
     # FortiOS returns 200 even on failed login. With ajax=1, explicit success is "1".
-    # However, some configurations (or disclaimers) return HTML instead. We check if an auth cookie was set.
+    # Response "0" explicitly means invalid credentials.
     if not response_text.startswith("1") and not has_auth_cookie:
-        if "<html" in response_text.lower() or "<!doctype" in response_text.lower():
-            raise ConnectionError(f"Login failed for {fortigate_ip} with user '{username}'. (Invalid credentials or FortiOS blocked the login API request).")
+        if response_text == "0":
+            raise ConnectionError(f"Credenciales inválidas para {fortigate_ip}. El usuario '{username}' o la contraseña son incorrectos en este FortiGate.")
+        elif "<html" in response_text.lower() or "<!doctype" in response_text.lower():
+            raise ConnectionError(f"Login bloqueado para {fortigate_ip} con usuario '{username}'. FortiOS devolvió la página de login (posible disclaimer o bloqueo de API).")
         else:
-            raise ConnectionError(f"Login failed or intercepted for {fortigate_ip} with user '{username}'. Response snippet: {response_text[:100]}")
+            raise ConnectionError(f"Login fallido para {fortigate_ip} con usuario '{username}'. Respuesta del servidor: {response_text[:100]}")
 
     headers = {}
     if csrf_token:
@@ -194,10 +196,12 @@ def restore_config_with_credentials(fortigate_ip: str, username: str, password: 
             has_auth_cookie = True
 
     if not response_text.startswith("1") and not has_auth_cookie:
-        if "<html" in response_text.lower() or "<!doctype" in response_text.lower():
-            raise ConnectionError(f"Login failed for {fortigate_ip} with user '{username}'. (Invalid credentials or FortiOS blocked the login API request).")
+        if response_text == "0":
+            raise ConnectionError(f"Credenciales inválidas para {fortigate_ip}. El usuario '{username}' o la contraseña son incorrectos en este FortiGate.")
+        elif "<html" in response_text.lower() or "<!doctype" in response_text.lower():
+            raise ConnectionError(f"Login bloqueado para {fortigate_ip} con usuario '{username}'. FortiOS devolvió la página de login (posible disclaimer o bloqueo de API).")
         else:
-            raise ConnectionError(f"Login failed or intercepted for {fortigate_ip} with user '{username}'. Response snippet: {response_text[:100]}")
+            raise ConnectionError(f"Login fallido para {fortigate_ip} con usuario '{username}'. Respuesta del servidor: {response_text[:100]}")
 
     headers = {
         "Origin": base_url,
