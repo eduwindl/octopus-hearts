@@ -16,7 +16,7 @@ def _is_valid_config(content: bytes) -> bool:
         return False
     
     text = content.decode("utf-8", errors="ignore")
-    markers = ["#config-version", "#FortiGate", "config system global", "config global"]
+    markers = ["#config-version", "#FortiGate", "config system global", "config global", "config system interface"]
     return any(marker in text for marker in markers)
 
 
@@ -392,7 +392,9 @@ def _download_backup_cli(host_with_port: str, username: str, password: str) -> b
         if _is_valid_config(config_data):
             return config_data
             
-        raise ConnectionError("La salida de la CLI no contiene una configuración válida.")
+        # If invalid, provide a snippet of the output to diagnose
+        sample = config_data.decode("utf-8", errors="ignore")[:150].replace("\n", " ")
+        raise ConnectionError(f"CLI no devolvió una config válida. Recibido: [{sample}...]")
 
     except Exception as e:
         raise ConnectionError(f"Fallo en CLI/SSH: {str(e)}")
