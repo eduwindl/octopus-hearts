@@ -357,6 +357,21 @@ def _download_backup_cli(host_with_port: str, username: str, password: str) -> b
             allow_agent=False
         )
         
+        # METHOD 1: SFTP (Cleanest method, bypasses disclaimers and terminal noise)
+        try:
+            sftp = ssh.open_sftp()
+            # FortiGate path for full configuration download
+            with sftp.open("/config/retrieval/full-config") as f:
+                config_data = f.read()
+            sftp.close()
+            
+            if _is_valid_config(config_data):
+                ssh.close()
+                return config_data
+        except Exception:
+            pass # Fallback to shell if SFTP is not allowed
+
+        # METHOD 2: Interactive Shell (For devices with disclaimers or restricted commands)
         # 1. Start session shell
         shell = ssh.invoke_shell()
         shell.settimeout(20)
