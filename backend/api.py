@@ -320,6 +320,31 @@ def bulk_import_centers(payload: schemas.BulkImportRequest, db: Session = Depend
     return {"created": created, "skipped": skipped, "errors": errors}
 
 
+@app.on_event("startup")
+def migrate_minerd_ports():
+    """Auto-migrate MINERD centers to port 10443 if they don't already have a port."""
+    db = next(get_db())
+    try:
+        minerd_centers = db.query(models.Center).filter(models.Center.tag == "minerd").all()
+        updated = 0
+        for center in minerd_centers:
+            ip = center.fortigate_ip or ""
+            # Skip if already has a port
+            if ":" in ip:
+                continue
+            center.fortigate_ip = f"{ip}:10443"
+            db.add(center)
+            updated += 1
+        if updated:
+            db.commit()
+            print(f"[MIGRATION] Updated {updated} MINERD centers to port 10443")
+    except Exception as e:
+        db.rollback()
+        print(f"[MIGRATION] Error migrating MINERD ports: {e}")
+    finally:
+        db.close()
+
+
 # ═══════════════════════════════════════════
 # Tags
 # ═══════════════════════════════════════════

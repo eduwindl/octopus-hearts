@@ -15,8 +15,8 @@ function autoFillPort(tagSelectId, portInputId) {
   if (tag === "minerd") {
     portInput.value = "10443";
   } else {
-    // Leave alone or revert to default 443 if it was specifically 10443
-    if (portInput.value === "10443") portInput.value = "443";
+    // Revert to default 443 only if it was specifically 10443
+    if (portInput.value === "10443" || portInput.value === "") portInput.value = "443";
   }
 }
 
