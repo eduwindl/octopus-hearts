@@ -223,25 +223,41 @@ def fetch_config_with_credentials(fortigate_ip: str, username: str, password: st
     except Exception as e:
         errors.append(f"CLI/SSH Error: {str(e)}")
 
-    # ── Attempt 2: REST API (Fallback) ──
-    try:
-        base_url = f"https://{fortigate_ip}"
-        session = requests.Session()
-        session.verify = settings.fortigate_verify_ssl
-        
-        csrf_token = _try_login(session, base_url, username, password)
-        content = _download_backup(session, base_url, csrf_token)
-        
-        # Clean logout
+    # ── Attempt 2: REST API (Primary Port) ──
+    ports_to_try = []
+    if ":" in fortigate_ip:
+        main_ip, main_port = fortigate_ip.split(":", 1)
+        ports_to_try.append(main_port)
+        # If 10443 failed, always try 443 as fallback
+        if main_port == "10443":
+            ports_to_try.append("443")
+    else:
+        main_ip = fortigate_ip
+        ports_to_try = ["443", "10443"]
+
+    for port in ports_to_try:
         try:
-            headers = {"X-CSRFTOKEN": csrf_token} if csrf_token else {}
-            session.post(f"{base_url}{LOGOUT_ENDPOINT}", data={"ajax": "1"}, headers=headers, timeout=5)
-        except Exception:
-            pass
+            base_url = f"https://{main_ip}:{port}"
+            session = requests.Session()
+            session.verify = settings.fortigate_verify_ssl
             
-        return content
-    except Exception as e:
-        errors.append(f"API Error: {str(e)}")
+            csrf_token = _try_login(session, base_url, username, password)
+            content = _download_backup(session, base_url, csrf_token)
+            
+            # Clean logout
+            try:
+                headers = {"X-CSRFTOKEN": csrf_token} if csrf_token else {}
+                session.post(f"{base_url}{LOGOUT_ENDPOINT}", data={"ajax": "1"}, headers=headers, timeout=5)
+            except Exception:
+                pass
+                
+            return content
+        except Exception as e:
+            # If it's a "Connection Refused" and we have more ports to try, continue
+            if "10061" in str(e) or "refused" in str(e).lower():
+                errors.append(f"API Port {port}: Connection Refused")
+                continue
+            errors.append(f"API Port {port}: {str(e)}")
 
     raise ConnectionError(f"No se pudo obtener el backup por ningún método:\n" + "\n".join(errors))
 
