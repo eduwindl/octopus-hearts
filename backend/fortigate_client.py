@@ -277,9 +277,14 @@ def _download_config_cmdb(session: requests.Session, base_url: str, csrf_token: 
     # Limpiar versión (ej: "v7.4.11" -> "7.4.11")
     version_clean = version[1:] if version.lower().startswith('v') else version
     
+    # Extract model from the 16-character FortiGate serial number (first 6 chars)
+    # e.g., FGT60FTK2109AUEG -> FGT60F
+    model = serial[:6] if len(serial) >= 6 and serial != "UNKNOWN" else "FGT"
+    
     # FortiOS-compatible header
-    config_lines.append(f"#config-version={serial}-{version_clean}-FW-build{build}:opmode=0:vdom=0")
-    config_lines.append(f"#conf_file_ver={build}")
+    config_lines.append(f"#config-version={model}-{version_clean}-FW-build{build}:opmode=0:vdom=0:user=admin")
+    # Generar un conf_file_ver estético y válido
+    config_lines.append(f"#conf_file_ver=577097575828080")
     config_lines.append(f"#buildno={build}")
     config_lines.append(f"#global_vdom=1")
     config_lines.append("")
@@ -355,17 +360,27 @@ def _download_config_cmdb(session: requests.Session, base_url: str, csrf_token: 
             results = data.get("results", [])
             section_name = section.replace("/", " ")
             
-            if isinstance(results, list) and len(results) > 0:
+            if isinstance(results, dict):
+                # Singleton configuration object (e.g. system global)
+                if results:
+                    config_lines.append(f"config {section_name}")
+                    for line in _render_entry(results, indent=1):
+                        config_lines.append(line.replace("    ", "", 1)) # remove first indent
+                    config_lines.append("end")
+            elif isinstance(results, list) and len(results) > 0:
+                # Table configuration object (e.g. system interface, firewall policy)
                 config_lines.append(f"config {section_name}")
                 for entry in results:
                     if not isinstance(entry, dict):
                         continue
                     name = entry.get("name", entry.get("id", entry.get("mkey", "")))
-                    if name:
+                    if name != "":
                         config_lines.append(f'    edit "{name}"')
                     else:
                         config_lines.append("    edit 0")
-                    config_lines.extend(_render_entry(entry))
+                        
+                    for line in _render_entry(entry, indent=2):
+                        config_lines.append(line.replace("    ", "", 1)) # standard structure is 1 less indent inside 'edit' than our generic recursive
                     config_lines.append("    next")
                 config_lines.append("end")
                 sections_read += 1
