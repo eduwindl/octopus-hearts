@@ -215,11 +215,13 @@ def _download_backup(session: requests.Session, base_url: str, csrf_token: str |
                 f"para descargar backups (requiere Super_Admin o permiso de lectura en System Config)."
             )
         if status == 424:
-            raise ConnectionError(
+            err = ConnectionError(
                 f"Error 424: El FortiGate rechazó TODAS las combinaciones de backup. "
                 f"Respuesta del equipo: {error_424_body or 'sin detalle'}. "
                 f"El usuario posiblemente no tiene permiso para descargar configuraciones."
             )
+            err.error_424_body = error_424_body
+            raise err
         raise ConnectionError(f"Error al descargar backup: HTTP {status}")
     
     # No response at all (all requests threw exceptions)
@@ -232,7 +234,7 @@ def _download_backup(session: requests.Session, base_url: str, csrf_token: str |
     raise ConnectionError(err_msg)
 
 
-def _download_config_cmdb(session: requests.Session, base_url: str, csrf_token: str | None) -> bytes:
+def _download_config_cmdb(session: requests.Session, base_url: str, csrf_token: str | None, error_424_body: str = "") -> bytes:
     """Download config by reading CMDB sections. Produces FortiOS-compatible CLI format."""
     headers = {}
     if csrf_token:
@@ -246,6 +248,17 @@ def _download_config_cmdb(session: requests.Session, base_url: str, csrf_token: 
     version = "unknown"
     build = "0"
     hostname = "FortiGate"
+    
+    import json
+    if error_424_body:
+        try:
+            err_json = json.loads(error_424_body)
+            serial = err_json.get("serial", serial)
+            version = err_json.get("version", version)
+            build = str(err_json.get("build", build))
+        except Exception:
+            pass
+
     try:
         status_resp = session.get(
             f"{base_url}/api/v2/monitor/system/status",
@@ -261,8 +274,15 @@ def _download_config_cmdb(session: requests.Session, base_url: str, csrf_token: 
     except Exception:
         pass
     
+    # Limpiar versión (ej: "v7.4.11" -> "7.4.11")
+    version_clean = version[1:] if version.lower().startswith('v') else version
+    
     # FortiOS-compatible header
-    config_lines.append(f"#config-version={serial}-{version}-FW-build{build}:opmode=0:vdom=0")
+    config_lines.append(f"#config-version={serial}-{version_clean}-FW-build{build}:opmode=0:vdom=0")
+    config_lines.append("#conf_file_ver=0")
+    config_lines.append(f"#buildno={build}")
+    config_lines.append("#global_vdom=1")
+    config_lines.append("")
     config_lines.append(f"#conf_file_ver={build}")
     config_lines.append(f"#buildno={build}")
     config_lines.append(f"#global_vdom=1")
@@ -451,7 +471,8 @@ def fetch_config_with_credentials(fortigate_ip: str, username: str, password: st
                 # If backup endpoint failed with 424, try CMDB method
                 if "424" in str(backup_err):
                     try:
-                        content = _download_config_cmdb(session, base_url, csrf_token)
+                        error_base = getattr(backup_err, "error_424_body", "")
+                        content = _download_config_cmdb(session, base_url, csrf_token, error_base)
                     except Exception as cmdb_err:
                         raise ConnectionError(f"Backup API: {backup_err}. CMDB fallback: {cmdb_err}")
                 else:
